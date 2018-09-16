@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.control.ToggleButton?>
+<?import javafx.scene.layout.ColumnConstraints?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.RowConstraints?>
+<?import javafx.scene.layout.VBox?>
+
+
+<SplitPane dividerPositions="0.6455331412103746" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" orientation="VERTICAL" xmlns="http://javafx.com/javafx/8.0.141" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.mikesajak.logviewer.ui.controller.LogTableController">
+   <items>
+      <VBox maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" spacing="5.0">
+         <children>
+            <GridPane hgap="5.0" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" vgap="5.0">
+              <columnConstraints>
+                <ColumnConstraints halignment="RIGHT" hgrow="NEVER" maxWidth="1.7976931348623157E308" minWidth="10.0" />
+                <ColumnConstraints hgrow="ALWAYS" maxWidth="1.7976931348623157E308" minWidth="10.0" />
+              </columnConstraints>
+              <rowConstraints>
+                <RowConstraints maxHeight="1.7976931348623157E308" minHeight="25.0" vgrow="SOMETIMES" />
+                <RowConstraints maxHeight="1.7976931348623157E308" minHeight="25.0" vgrow="SOMETIMES" />
+                  <RowConstraints maxHeight="1.7976931348623157E308" minHeight="25.0" prefHeight="30.0" vgrow="SOMETIMES" />
+              </rowConstraints>
+               <children>
+                  <Label alignment="BASELINE_RIGHT" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" text="Search" />
+                  <ComboBox fx:id="searchCombo" editable="true" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" promptText="Search query" GridPane.columnIndex="1" />
+                  <Label alignment="BASELINE_RIGHT" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" text="Filter" GridPane.rowIndex="1" />
+                  <ComboBox fx:id="filterCombo" editable="true" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" prefWidth="150.0" promptText="Filter criteria" GridPane.columnIndex="1" GridPane.rowIndex="1" />
+                  <HBox maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" spacing="5.0" GridPane.columnIndex="1" GridPane.rowIndex="2">
+                     <children>
+                        <ToggleButton fx:id="errorLevelToggle" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false" selected="true" text="Error" />
+                        <ToggleButton fx:id="warnLevelToggle" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false" selected="true" text="Warning" />
+                        <ToggleButton fx:id="infoLevelToggle" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false" selected="true" text="Info" />
+                        <ToggleButton fx:id="debugLevelToggle" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false" selected="true" text="Debug" />
+                        <ToggleButton fx:id="traceLevelToggle" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false" selected="true" text="Trace" />
+                        <ToggleButton fx:id="otherLevelToggle" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false" selected="true" text="Other" />
+                     </children>
+                  </HBox>
+               </children>
+            </GridPane>
+            <TableView fx:id="logTableView" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" tableMenuButtonVisible="true">
+              <columns>
+                  <TableColumn fx:id="idColumn" editable="false" prefWidth="44.0" sortable="false" text="Id" />
+                  <TableColumn fx:id="dirColumn" editable="false" prefWidth="75.0" sortable="false" text="Directory" />
+                <TableColumn fx:id="fileColumn" editable="false" prefWidth="106.0" sortable="false" text="File" />
+                <TableColumn fx:id="timestampColumn" editable="false" prefWidth="90.0" sortable="false" text="Timestamp" />
+                  <TableColumn fx:id="levelColumn" editable="false" prefWidth="60.0" sortable="false" text="Level" />
+                  <TableColumn fx:id="threadColumn" editable="false" prefWidth="75.0" sortable="false" text="Thread" />
+                  <TableColumn fx:id="sessionColumn" editable="false" prefWidth="75.0" sortable="false" text="Session" />
+                  <TableColumn fx:id="requestColumn" prefWidth="75.0" text="Request" />
+                  <TableColumn fx:id="userColumn" prefWidth="75.0" text="User" />
+                  <TableColumn fx:id="bodyColumn" editable="false" prefWidth="500.0" sortable="false" text="Body" />
+              </columns>
+            </TableView>
+         </children>
+      </VBox>
+      <TitledPane maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" text="Selected log entry contents">
+         <content>
+            <TextArea fx:id="selEntryTextArea" editable="false" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" wrapText="true" />
+         </content>
+      </TitledPane>
+   </items>
+</SplitPane>

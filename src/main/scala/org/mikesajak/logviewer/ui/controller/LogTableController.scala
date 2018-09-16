@@ -1,0 +1,288 @@
+package org.mikesajak.logviewer.ui.controller
+
+import java.time.format.DateTimeFormatter
+import java.util.function.Predicate
+
+import com.google.common.eventbus.Subscribe
+import com.typesafe.scalalogging.Logger
+import groovy.lang.{Binding, GroovyShell}
+import org.mikesajak.logviewer.log.{LogEntry, LogLevel, NewLogOpened}
+import org.mikesajak.logviewer.util.{EventBus, Measure, ResourceManager}
+import scalafx.Includes._
+import scalafx.beans.property.{ObjectProperty, StringProperty}
+import scalafx.collections.ObservableBuffer
+import scalafx.collections.transformation.{FilteredBuffer, SortedBuffer}
+import scalafx.css.PseudoClass
+import scalafx.event.ActionEvent
+import scalafx.scene.CacheHint
+import scalafx.scene.control._
+import scalafx.scene.image.{Image, ImageView}
+import scalafx.scene.input.{KeyEvent, MouseButton, MouseEvent}
+import scalafxml.core.macros.sfxml
+
+import scala.collection.JavaConverters._
+
+object LogRow {
+  val whiteSpacePattern = """\r\n|\n|\r""".r
+
+  val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
+}
+
+class LogRow(val logEntry: LogEntry, resourceMgr: ResourceManager) {
+  import LogRow._
+
+  val id = new StringProperty(logEntry.id.index.toString)
+  val timestamp = new StringProperty(dateTimeFormatter.format(logEntry.timestamp))
+  val directory = new StringProperty(logEntry.directory)
+  val file = new StringProperty(logEntry.file)
+  val level = new StringProperty(logEntry.level.toString)
+  val thread = new StringProperty(logEntry.thread)
+  val session = new StringProperty(logEntry.sessionId)
+  val requestId = new StringProperty(logEntry.requestId)
+  val userId = new StringProperty(logEntry.userId)
+  val body = new StringProperty(whiteSpacePattern.replaceAllIn(logEntry.body, "\\\\n"))
+
+  def canEqual(other: Any): Boolean = other.isInstanceOf[LogRow]
+
+  override def equals(other: Any): Boolean = other match {
+    case that: LogRow =>
+      (that canEqual this) &&
+        logEntry.id == that.logEntry.id
+    case _ => false
+  }
+
+  override def hashCode(): Int = {
+    val state = Seq(logEntry.id)
+    state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
+  }
+}
+
+@sfxml
+class LogTableController(logTableView: TableView[LogRow],
+                         idColumn: TableColumn[LogRow, String],
+                         dirColumn: TableColumn[LogRow, String],
+                         fileColumn: TableColumn[LogRow, String],
+                         timestampColumn: TableColumn[LogRow, String],
+                         levelColumn: TableColumn[LogRow, LogLevel],
+                         threadColumn: TableColumn[LogRow, String],
+                         sessionColumn: TableColumn[LogRow, String],
+                         requestColumn: TableColumn[LogRow, String],
+                         userColumn: TableColumn[LogRow, String],
+                         bodyColumn: TableColumn[LogRow, String],
+                         selEntryTextArea: TextArea,
+
+                         searchCombo: ComboBox[String],
+                         filterCombo: ComboBox[String],
+
+                         errorLevelToggle: ToggleButton, warnLevelToggle: ToggleButton, infoLevelToggle: ToggleButton,
+                         debugLevelToggle: ToggleButton, traceLevelToggle: ToggleButton, otherLevelToggle: ToggleButton,
+
+                         resourceMgr: ResourceManager,
+                         eventBus: EventBus) {
+  private implicit val logger = Logger[LogTableController]
+
+  private val tableRows = ObservableBuffer[LogRow]()
+  private val filteredRows = new FilteredBuffer(tableRows)
+  private val sortedRows = new SortedBuffer(filteredRows)
+
+  private val logLevelToggles = Seq(errorLevelToggle, warnLevelToggle, infoLevelToggle, debugLevelToggle, traceLevelToggle)
+  private val logLevelPseudoClassMap = Map(
+    LogLevel.Error   -> PseudoClass("error"),
+    LogLevel.Warning -> PseudoClass("warn"),
+    LogLevel.Info    -> PseudoClass("info"),
+    LogLevel.Debug   -> PseudoClass("debug"),
+    LogLevel.Trace   -> PseudoClass("trace")
+  )
+
+  init()
+
+
+  def init() {
+    logTableView.selectionModel.value.selectionMode = SelectionMode.Multiple
+
+    idColumn.cellValueFactory = {
+      _.value.id
+    }
+    dirColumn.cellValueFactory = {
+      _.value.directory
+    }
+    fileColumn.cellValueFactory = {
+      _.value.file
+    }
+    timestampColumn.cellValueFactory = {
+      _.value.timestamp
+    }
+    levelColumn.cellValueFactory = { t => ObjectProperty(t.value.logEntry.level) }
+    levelColumn.cellFactory = { tc: TableColumn[LogRow, LogLevel] =>
+      new TableCell[LogRow, LogLevel]() {
+        item.onChange { (_, _, newLogLevel) =>
+          text = if (newLogLevel != null) newLogLevel.toString else null
+          graphic = if (newLogLevel != null) findIconFor(newLogLevel).orNull else null
+
+//          if (!tableRow.value.isEmpty) {
+//            val value = tableRow.value.item.value
+//            if (value != null) {
+//              val logEntry = value.asInstanceOf[LogRow].logEntry
+//              logLevelPseudoClassMap.foreach { case (logLevel, pseudoClass) =>
+//                tableRow.value.pseudoClassStateChanged(pseudoClass, logEntry.level == logLevel)
+//              }
+//            }
+//          }
+        }
+      }
+    }
+    threadColumn.cellValueFactory = {
+      _.value.thread
+    }
+    sessionColumn.cellValueFactory = {
+      _.value.session
+    }
+    requestColumn.cellValueFactory = {
+      _.value.requestId
+    }
+    userColumn.cellValueFactory = {
+      _.value.userId
+    }
+    bodyColumn.cellValueFactory = {
+      _.value.body
+    }
+
+    logTableView.rowFactory = { tableView =>
+      val row = new TableRow[LogRow]()
+
+      row.handleEvent(MouseEvent.MouseClicked) { event: MouseEvent =>
+        if (!row.isEmpty) {
+          event.button match {
+            case MouseButton.Primary => selEntryTextArea.text = row.item.value.logEntry.rawMessage
+            case MouseButton.Secondary =>
+            case MouseButton.Middle =>
+            case _ =>
+          }
+        }
+      }
+      row
+    }
+
+    logTableView.items = sortedRows
+
+    searchCombo.onAction = (ae: ActionEvent) => logger.info(s"Search combo ENTER, text=${searchCombo.editor.text.get()}")
+
+    val knownWords = Seq("id", "directory", "file", "level", "thread", "sessionId", "requestId", "userId", "body", "rawMessage")
+
+//    filterCombo.editor.value.handleEvent(KeyEvent.KeyTyped) { event: KeyEvent =>
+//      val text = filterCombo.editor.text.get()
+//      val cursorIdx = filterCombo.editor.value.getCaretPosition
+//      println(s"Key typed: $text, cursor=$cursorIdx")
+//      val prevDotIdx = text.lastIndexOf('.', cursorIdx)
+//      if (prevDotIdx < cursorIdx) {
+//        val lastSegment = text.substring(prevDotIdx, cursorIdx)
+//        if (lastSegment.length > 1) {
+//          knownWords.find(str => str.startsWith(lastSegment))
+//            .foreach(matchingWord => println(s"TODO: Show hint: ($lastSegment)${matchingWord.substring(lastSegment.length)}"))
+//        }
+//      }
+//    }
+
+    filterCombo.onAction = (ae: ActionEvent) => {
+      val filterText = filterCombo.editor.text.get()
+      logger.info(s"Filter combo action, text=$filterText")
+      filteredRows.predicate = buildPredicate()
+    }
+
+
+    logLevelToggles.foreach { button =>
+      button.onAction = (ae: ActionEvent) => filteredRows.predicate = buildPredicate()
+    }
+
+    eventBus.register(this)
+  }
+
+  private def buildPredicate() = {
+    val toggleButtonPredicate =
+      if (logLevelToggles.forall(!_.isSelected)) null
+      else {
+        togglePred(errorLevelToggle).and(logLevelPred(LogLevel.Error)) or
+          togglePred(warnLevelToggle).and(logLevelPred(LogLevel.Warning)) or
+          togglePred(infoLevelToggle).and(logLevelPred(LogLevel.Info)) or
+          togglePred(debugLevelToggle).and(logLevelPred(LogLevel.Debug)) or
+          togglePred(traceLevelToggle).and(logLevelPred(LogLevel.Trace))
+      }
+
+    val filterExpression = filterCombo.editor.text.get
+    if (filterExpression.nonEmpty) {
+      val expressionPredicate = parseFilter(filterExpression, suppressExceptions = true)
+      toggleButtonPredicate.and(expressionPredicate)
+    } else toggleButtonPredicate
+
+    // TODO: test predicate on some basic data
+
+  }
+
+  private def logLevelPred(level: LogLevel): Predicate[LogRow] = logRow => logRow.logEntry.level == level
+  private def togglePred(toggle: ToggleButton): Predicate[LogRow] = logRow => toggle.isSelected
+
+  class InvalidFilterExpression(message: String) extends Exception(message)
+  class FilterExpressionError(message: String, cause: Exception) extends Exception(message, cause)
+
+  private def parseFilter(text: String, suppressExceptions: Boolean) = {
+    val shell = new GroovyShell()
+    val script = shell.parse(text)
+
+    val predicate: Predicate[LogRow] = { logRow =>
+      shell.setVariable("entry", logRow.logEntry)
+      try {
+        val result: AnyRef = script.run()
+        if (!result.isInstanceOf[Boolean])
+          handleException(text, suppressExceptions, new InvalidFilterExpression(s"Filter expression must return Boolean value.\nExpression:\n$text"))
+        result.asInstanceOf[Boolean]
+      } catch {
+        case e: Exception =>
+          handleException(text, suppressExceptions, new FilterExpressionError(s"Exception occurred during evaluation of filter expression.\nExpression:\n$text", e))
+      }
+    }
+
+    predicate
+  }
+
+  private def handleException(expr: String, suppress: Boolean, ex: Exception): Boolean = {
+    if (suppress) {
+      logger.warn(s"Exception occurred during evaluation of expression:\n$expr", ex)
+      true
+    } else throw ex
+  }
+
+  private def findIconFor(level: LogLevel) = {
+    val icon = level match {
+      case LogLevel.Error => Some(resourceMgr.getIcon("icons8-error4-16.png"))
+      case LogLevel.Warning => Some(resourceMgr.getIcon("icons8-warning-16.png"))
+      case LogLevel.Info => Some(resourceMgr.getIcon("icons8-dymek-info2-16.png"))
+      case LogLevel.Debug => Some(resourceMgr.getIcon("icons8-debug4-16.png"))
+      case LogLevel.Trace => Some(resourceMgr.getIcon("icons8-debug3-16.png"))
+      case _ => None
+    }
+    icon.map(newCachedImageView)
+  }
+
+  private def newCachedImageView(img: Image): ImageView = {
+    val imageView = new ImageView(img)
+    imageView.preserveRatio = true
+    imageView.cache = true
+    imageView.cacheHint = CacheHint.Speed
+    imageView
+  }
+
+  @Subscribe
+  def onLogOpened(request: NewLogOpened): Unit = {
+    logger.debug(s"New log requset received")
+
+    val rows = Measure.measure("Converting log entries into rows") { () =>
+      request.logStore.entries.view
+                 .map(entry => new LogRow(entry, resourceMgr))
+    }
+
+    Measure.measure("Setting table rows") { () =>
+      tableRows.setAll(rows.asJava)
+    }
+  }
+
+}

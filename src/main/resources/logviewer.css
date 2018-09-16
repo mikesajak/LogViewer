@@ -1,0 +1,25 @@
+.table-view .table-row-cell .text {
+    -fx-fill: black;
+}
+
+
+
+.table-view .table-row-cell:error .text {
+    -fx-fill: red;
+}
+
+.table-view .table-row-cell:warn .text {
+    -fx-fill: blue;
+}
+
+.table-view .table-row-cell:info .text {
+    -fx-fill: black;
+}
+
+.table-view .table-row-cell:debug .text {
+    -fx-fill: gray;
+}
+
+.table-view .table-row-cell:trace .text {
+    -fx-fill: light-gray;
+}
