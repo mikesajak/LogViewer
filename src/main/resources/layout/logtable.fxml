@@ -15,11 +15,11 @@
 <?import javafx.scene.layout.VBox?>
 
 
-<SplitPane dividerPositions="0.6455331412103746" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" orientation="VERTICAL" xmlns="http://javafx.com/javafx/8.0.141" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.mikesajak.logviewer.ui.controller.LogTableController">
+<SplitPane fx:id="splitPane" dividerPositions="0.6455331412103746" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" orientation="VERTICAL" xmlns="http://javafx.com/javafx/8.0.111" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.mikesajak.logviewer.ui.controller.LogTableController">
    <items>
       <VBox maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" spacing="5.0">
          <children>
-            <GridPane hgap="5.0" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" vgap="5.0">
+            <GridPane hgap="5.0" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" vgap="5.0" VBox.vgrow="NEVER">
               <columnConstraints>
                 <ColumnConstraints halignment="RIGHT" hgrow="NEVER" maxWidth="1.7976931348623157E308" minWidth="10.0" />
                 <ColumnConstraints hgrow="ALWAYS" maxWidth="1.7976931348623157E308" minWidth="10.0" />
@@ -46,7 +46,7 @@
                   </HBox>
                </children>
             </GridPane>
-            <TableView fx:id="logTableView" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" tableMenuButtonVisible="true">
+            <TableView fx:id="logTableView" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" tableMenuButtonVisible="true" VBox.vgrow="ALWAYS">
               <columns>
                   <TableColumn fx:id="idColumn" editable="false" prefWidth="44.0" sortable="false" text="Id" />
                   <TableColumn fx:id="dirColumn" editable="false" prefWidth="75.0" sortable="false" text="Directory" />
@@ -60,11 +60,16 @@
                   <TableColumn fx:id="bodyColumn" editable="false" prefWidth="500.0" sortable="false" text="Body" />
               </columns>
             </TableView>
+            <HBox maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" VBox.vgrow="NEVER">
+               <children>
+                  <Label fx:id="statusLabel" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" text="Label" />
+               </children>
+            </HBox>
          </children>
       </VBox>
-      <TitledPane maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" text="Selected log entry contents">
+      <TitledPane maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" text="Selected log entry contents">
          <content>
-            <TextArea fx:id="selEntryTextArea" editable="false" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" wrapText="true" />
+            <TextArea fx:id="selEntryTextArea" editable="false" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" wrapText="true" />
          </content>
       </TitledPane>
    </items>

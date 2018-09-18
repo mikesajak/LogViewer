@@ -5,6 +5,7 @@ import com.typesafe.scalalogging.Logger
 import context.AppContext
 import org.mikesajak.logviewer.config.Configuration
 import org.mikesajak.logviewer.log.LogParserMgr
+import org.mikesajak.logviewer.ui.ConsoleProgressHandler
 import org.mikesajak.logviewer.util.{ResourceManager, UILoader}
 import scalafx.application.{JFXApp, Platform}
 import scalafx.application.JFXApp.PrimaryStage
@@ -35,7 +36,9 @@ object Main extends JFXApp {
 
   appController.init(stage, this)
 
+  // instantiate global standalone beans
   injector.getInstance(classOf[LogParserMgr])
+  injector.getInstance(classOf[ConsoleProgressHandler])
 
   stage.onCloseRequest = we => {
     we.consume()

@@ -5,11 +5,12 @@
 <?import javafx.scene.control.MenuItem?>
 <?import javafx.scene.control.SeparatorMenuItem?>
 
-<MenuBar xmlns="http://javafx.com/javafx/8.0.141" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.mikesajak.logviewer.ui.controller.MenuController">
+<MenuBar xmlns="http://javafx.com/javafx/8.0.111" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.mikesajak.logviewer.ui.controller.MenuController">
   <menus>
     <Menu mnemonicParsing="false" text="File">
       <items>
-            <MenuItem mnemonicParsing="false" onAction="#onFileOpen" text="Open log..." />
+            <MenuItem mnemonicParsing="false" onAction="#onDirOpen" text="Open log directory..." />
+            <MenuItem mnemonicParsing="false" onAction="#onFilesOpen" text="Open log files..." />
             <SeparatorMenuItem mnemonicParsing="false" />
         <MenuItem mnemonicParsing="false" onAction="#onFileClose" text="Close" />
       </items>

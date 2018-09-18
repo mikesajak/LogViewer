@@ -5,6 +5,7 @@ import net.codingwell.scalaguice.ScalaModule
 import org.mikesajak.logviewer.{AppController, OperationMgr}
 import org.mikesajak.logviewer.config.Configuration
 import org.mikesajak.logviewer.log.{LogParserMgr, LogStore, SimpleMemoryLogStore}
+import org.mikesajak.logviewer.ui.ConsoleProgressHandler
 import org.mikesajak.logviewer.util.{EventBus, ResourceManager}
 
 class AppContext extends AbstractModule with ScalaModule {
@@ -40,9 +41,13 @@ class UIContext extends AbstractModule with ScalaModule {
 
   @Provides
   @Singleton
-  def provideOperationManager(appController: AppController, eventBus: EventBus): OperationMgr = {
-    new OperationMgr(appController, eventBus)
+  def provideOperationManager(appController: AppController, eventBus: EventBus, config: Configuration): OperationMgr = {
+    new OperationMgr(appController, eventBus, config)
   }
+
+  @Provides
+  @Singleton
+  def provideProgressHandler(eventBus: EventBus) = new ConsoleProgressHandler(eventBus)
 
 }
 

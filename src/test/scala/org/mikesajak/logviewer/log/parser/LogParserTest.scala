@@ -25,7 +25,7 @@ class LogParserTest extends FlatSpec with Matchers {
       """.stripMargin
 
     val entries = parser.parse(dataSource(log),
-                               new SimpleLogEntryParser(new SimpleLogIdGenerator("testDir", "testFile", 0)))
+                               new SimpleLogEntryParser(new SimpleLogIdGenerator("testDir", "testFile")))
         .toIndexedSeq
 
     entries.size shouldBe 7
@@ -52,7 +52,7 @@ class LogParserTest extends FlatSpec with Matchers {
       """.stripMargin
 
     val entries = parser.parse(dataSource(log),
-                               new SimpleLogEntryParser(new SimpleLogIdGenerator("testDir", "testFile", 0)))
+                               new SimpleLogEntryParser(new SimpleLogIdGenerator("testDir", "testFile")))
         .toIndexedSeq
 
     entries.size shouldBe 7
@@ -67,7 +67,7 @@ class LogParserTest extends FlatSpec with Matchers {
       """.stripMargin
 
     val entries = parser.parse(dataSource(log),
-      new SimpleLogEntryParser(new SimpleLogIdGenerator("testDir", "testFile", 0)))
+      new SimpleLogEntryParser(new SimpleLogIdGenerator("testDir", "testFile")))
                   .toIndexedSeq
 
     entries.size shouldBe 2

@@ -26,7 +26,7 @@ class SimpleLogEntryParser(idGenerator: IdGenerator) extends LogEntryParser {
                                           .collectFirst { case Some(ts) => ts }
                                           .get // TODO what if date does not match - add error handler
 
-        Some(new SimpleLogEntry(idGenerator.nextId(), timestamp, LogLevel.of(levelStr),
+        Some(new SimpleLogEntry(idGenerator.genId(timestamp), timestamp, LogLevel.of(levelStr),
                                 thread, sessionId, requestId, userId, entryStr, entryStr.length - body.length))
 
       case _ => None

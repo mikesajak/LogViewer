@@ -1,15 +1,15 @@
 package org.mikesajak.logviewer.log.parser
 
+import java.time.LocalDateTime
+
 import org.mikesajak.logviewer.log.LogId
 
 trait IdGenerator {
-  def nextId(): LogId
+  def genId(timestamp: LocalDateTime): LogId
 }
 
-class SimpleLogIdGenerator(directory: String, file: String, var index: Long = 0) extends IdGenerator {
-  override def nextId(): LogId = {
-    val id = LogId(directory, file, index)
-    index += 1
-    id
+class SimpleLogIdGenerator(directory: String, file: String) extends IdGenerator {
+  override def genId(timestamp: LocalDateTime): LogId = {
+    LogId(directory, file, timestamp)
   }
 }

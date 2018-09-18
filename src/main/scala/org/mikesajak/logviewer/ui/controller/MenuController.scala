@@ -5,11 +5,8 @@ import scalafxml.core.macros.sfxml
 
 @sfxml
 class MenuController(opsManager: OperationMgr) {
-  def onFileOpen(): Unit = {
-    opsManager.handleOpenLog()
-  }
+  def onDirOpen(): Unit = opsManager.handleOpenLogDir()
+  def onFilesOpen(): Unit = opsManager.handleOpenLogFiles()
 
-  def onFileClose(): Unit = {
-    opsManager.handleCloseApplication()
-  }
+  def onFileClose(): Unit = opsManager.handleCloseApplication()
 }

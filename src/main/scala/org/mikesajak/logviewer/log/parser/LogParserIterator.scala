@@ -75,7 +75,7 @@ class LogParserIterator2(private var origIt: Iterator[String],
 
   private def findNextEntry() = {
     var found = false
-    var entries = List[String]()
+    var entries: List[String] = List.empty
     while (inputIt.hasNext && !found) {
       found = rawLogEntryParser.matchBeginning(inputIt.peek)
       if (!found) {

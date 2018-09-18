@@ -5,10 +5,14 @@ import java.util.function.Predicate
 
 import com.google.common.eventbus.Subscribe
 import com.typesafe.scalalogging.Logger
-import groovy.lang.{Binding, GroovyShell}
-import org.mikesajak.logviewer.log.{LogEntry, LogLevel, NewLogOpened}
-import org.mikesajak.logviewer.util.{EventBus, Measure, ResourceManager}
+import groovy.lang.GroovyShell
+import javafx.collections.ObservableList
+import org.mikesajak.logviewer.log._
+import org.mikesajak.logviewer.ui.MappedObservableList
+import org.mikesajak.logviewer.util.Measure.measure
+import org.mikesajak.logviewer.util.{EventBus, ResourceManager}
 import scalafx.Includes._
+import scalafx.application.Platform
 import scalafx.beans.property.{ObjectProperty, StringProperty}
 import scalafx.collections.ObservableBuffer
 import scalafx.collections.transformation.{FilteredBuffer, SortedBuffer}
@@ -17,7 +21,8 @@ import scalafx.event.ActionEvent
 import scalafx.scene.CacheHint
 import scalafx.scene.control._
 import scalafx.scene.image.{Image, ImageView}
-import scalafx.scene.input.{KeyEvent, MouseButton, MouseEvent}
+import scalafx.scene.input.{MouseButton, MouseEvent}
+import scalafx.scene.layout.Priority
 import scalafxml.core.macros.sfxml
 
 import scala.collection.JavaConverters._
@@ -28,10 +33,10 @@ object LogRow {
   val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
 }
 
-class LogRow(val logEntry: LogEntry, resourceMgr: ResourceManager) {
+class LogRow(index: Int, val logEntry: LogEntry, resourceMgr: ResourceManager) {
   import LogRow._
 
-  val id = new StringProperty(logEntry.id.index.toString)
+  val idx = new StringProperty(index.toString)
   val timestamp = new StringProperty(dateTimeFormatter.format(logEntry.timestamp))
   val directory = new StringProperty(logEntry.directory)
   val file = new StringProperty(logEntry.file)
@@ -77,13 +82,16 @@ class LogTableController(logTableView: TableView[LogRow],
                          errorLevelToggle: ToggleButton, warnLevelToggle: ToggleButton, infoLevelToggle: ToggleButton,
                          debugLevelToggle: ToggleButton, traceLevelToggle: ToggleButton, otherLevelToggle: ToggleButton,
 
+                         statusLabel: Label,
+                         splitPane: SplitPane,
+
                          resourceMgr: ResourceManager,
                          eventBus: EventBus) {
   private implicit val logger = Logger[LogTableController]
 
-  private val tableRows = ObservableBuffer[LogRow]()
-  private val filteredRows = new FilteredBuffer(tableRows)
-  private val sortedRows = new SortedBuffer(filteredRows)
+  private var tableRows = ObservableBuffer[LogRow]()
+  private var filteredRows = new FilteredBuffer(tableRows)
+//  private var sortedRows = new SortedBuffer(filteredRows)
 
   private val logLevelToggles = Seq(errorLevelToggle, warnLevelToggle, infoLevelToggle, debugLevelToggle, traceLevelToggle)
   private val logLevelPseudoClassMap = Map(
@@ -101,7 +109,7 @@ class LogTableController(logTableView: TableView[LogRow],
     logTableView.selectionModel.value.selectionMode = SelectionMode.Multiple
 
     idColumn.cellValueFactory = {
-      _.value.id
+      _.value.idx
     }
     dirColumn.cellValueFactory = {
       _.value.directory
@@ -163,7 +171,9 @@ class LogTableController(logTableView: TableView[LogRow],
       row
     }
 
-    logTableView.items = sortedRows
+    splitPane.vgrow = Priority.Always
+
+    initLogRows(new ObservableBuffer[LogEntry]())
 
     searchCombo.onAction = (ae: ActionEvent) => logger.info(s"Search combo ENTER, text=${searchCombo.editor.text.get()}")
 
@@ -186,7 +196,9 @@ class LogTableController(logTableView: TableView[LogRow],
     filterCombo.onAction = (ae: ActionEvent) => {
       val filterText = filterCombo.editor.text.get()
       logger.info(s"Filter combo action, text=$filterText")
-      filteredRows.predicate = buildPredicate()
+      measure("Setting filter predicate") { () =>
+        filteredRows.predicate = buildPredicate()
+      }
     }
 
 
@@ -272,17 +284,38 @@ class LogTableController(logTableView: TableView[LogRow],
   }
 
   @Subscribe
-  def onLogOpened(request: NewLogOpened): Unit = {
-    logger.debug(s"New log requset received")
+  def onLogOpened(request: SetNewLogEntries): Unit = {
+    logger.debug(s"New log requset received, ${request.logStore.size} entries")
 
-    val rows = Measure.measure("Converting log entries into rows") { () =>
-      request.logStore.entries.view
-                 .map(entry => new LogRow(entry, resourceMgr))
-    }
+//    val rows = toRows(request.logStore.entries)
 
-    Measure.measure("Setting table rows") { () =>
-      tableRows.setAll(rows.asJava)
+    measure("Setting table rows") { () =>
+//      tableRows.setAll(rows.asJava)
+      initLogRows(request.logStore)
     }
   }
+
+  private def initLogRows(logEntries: ObservableList[LogEntry]): Unit = {
+    tableRows = new MappedObservableList[LogRow, LogEntry](logEntries, entry => new LogRow(0, entry, resourceMgr))
+    filteredRows = new FilteredBuffer(tableRows)
+//    sortedRows = new SortedBuffer(filteredRows)
+
+    logTableView.items = filteredRows
+
+    Platform.runLater {
+      statusLabel.text = s"${logEntries.size} log entries"
+    }
+  }
+
+  @Subscribe
+  def onLogFinished(request: FinishLogEntries): Unit = {
+    logger.debug("Finish adding log enties")
+  }
+
+//  private def toRows(entries: Seq[LogEntry]) =
+//    measure("Converting log entries into rows") { () =>
+//      entries.view.zipWithIndex
+//        .map { case (entry,idx) => new LogRow(idx, entry, resourceMgr) }
+//  }
 
 }
