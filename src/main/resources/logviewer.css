@@ -1,25 +1,32 @@
-.table-view .table-row-cell .text {
-    -fx-fill: black;
-}
 
-
-
-.table-view .table-row-cell:error .text {
+# log table - levels
+.table-view .table-row-cell.error .text {
     -fx-fill: red;
 }
 
-.table-view .table-row-cell:warn .text {
+.table-view .table-row-cell.warn .text {
     -fx-fill: blue;
 }
 
-.table-view .table-row-cell:info .text {
+.table-view .table-row-cell.info .text {
     -fx-fill: black;
 }
 
-.table-view .table-row-cell:debug .text {
+.table-view .table-row-cell.debug .text {
     -fx-fill: gray;
 }
 
-.table-view .table-row-cell:trace .text {
+.table-view .table-row-cell.trace .text {
     -fx-fill: light-gray;
 }
+
+.table-view .table-row-cell.other .text {
+    -fx-fill: black;
+}
+
+.combo-box .error {
+  -fx-text-box-border: red;
+  -fx-border-color: red;
+  -fx-text-fill: red;
+}
+

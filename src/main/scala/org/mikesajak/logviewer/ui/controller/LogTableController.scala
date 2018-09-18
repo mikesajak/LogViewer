@@ -1,5 +1,6 @@
 package org.mikesajak.logviewer.ui.controller
 
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.function.Predicate
 
@@ -15,7 +16,7 @@ import scalafx.Includes._
 import scalafx.application.Platform
 import scalafx.beans.property.{ObjectProperty, StringProperty}
 import scalafx.collections.ObservableBuffer
-import scalafx.collections.transformation.{FilteredBuffer, SortedBuffer}
+import scalafx.collections.transformation.FilteredBuffer
 import scalafx.css.PseudoClass
 import scalafx.event.ActionEvent
 import scalafx.scene.CacheHint
@@ -25,12 +26,12 @@ import scalafx.scene.input.{MouseButton, MouseEvent}
 import scalafx.scene.layout.Priority
 import scalafxml.core.macros.sfxml
 
-import scala.collection.JavaConverters._
+import scala.util.matching.Regex
 
 object LogRow {
-  val whiteSpacePattern = """\r\n|\n|\r""".r
+  val whiteSpacePattern: Regex = """\r\n|\n|\r""".r
 
-  val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
+  val dateTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
 }
 
 class LogRow(index: Int, val logEntry: LogEntry, resourceMgr: ResourceManager) {
@@ -87,20 +88,21 @@ class LogTableController(logTableView: TableView[LogRow],
 
                          resourceMgr: ResourceManager,
                          eventBus: EventBus) {
-  private implicit val logger = Logger[LogTableController]
+  private implicit val logger: Logger = Logger[LogTableController]
 
   private var tableRows = ObservableBuffer[LogRow]()
   private var filteredRows = new FilteredBuffer(tableRows)
 //  private var sortedRows = new SortedBuffer(filteredRows)
 
   private val logLevelToggles = Seq(errorLevelToggle, warnLevelToggle, infoLevelToggle, debugLevelToggle, traceLevelToggle)
-  private val logLevelPseudoClassMap = Map(
-    LogLevel.Error   -> PseudoClass("error"),
-    LogLevel.Warning -> PseudoClass("warn"),
-    LogLevel.Info    -> PseudoClass("info"),
-    LogLevel.Debug   -> PseudoClass("debug"),
-    LogLevel.Trace   -> PseudoClass("trace")
+  private val logLevelStyleClassMap = Map[LogLevel, String](
+    LogLevel.Error   -> "error",
+    LogLevel.Warning -> "warn",
+    LogLevel.Info    -> "info",
+    LogLevel.Debug   -> "debug",
+    LogLevel.Trace   -> "trace"
   )
+  private var filterValidationError: Option[String] = None
 
   init()
 
@@ -127,15 +129,17 @@ class LogTableController(logTableView: TableView[LogRow],
           text = if (newLogLevel != null) newLogLevel.toString else null
           graphic = if (newLogLevel != null) findIconFor(newLogLevel).orNull else null
 
-//          if (!tableRow.value.isEmpty) {
-//            val value = tableRow.value.item.value
-//            if (value != null) {
-//              val logEntry = value.asInstanceOf[LogRow].logEntry
-//              logLevelPseudoClassMap.foreach { case (logLevel, pseudoClass) =>
-//                tableRow.value.pseudoClassStateChanged(pseudoClass, logEntry.level == logLevel)
-//              }
-//            }
-//          }
+          if (!tableRow.value.isEmpty) {
+            val value = tableRow.value.item.value
+            if (value != null) {
+              val logEntry = value.asInstanceOf[LogRow].logEntry
+
+              tableRow.value.styleClass --= logLevelStyleClassMap.values
+              tableRow.value.styleClass -= "other"
+              tableRow.value.styleClass += logLevelStyleClassMap.getOrElse(logEntry.level, "other")
+              println("aaa")
+            }
+          }
         }
       }
     }
@@ -201,6 +205,17 @@ class LogTableController(logTableView: TableView[LogRow],
       }
     }
 
+    val filterValidationTooltip = new Tooltip()
+    filterCombo.editor.value.onMouseMoved = (me: MouseEvent) => {
+      filterValidationError.foreach { errorMsg =>
+        filterValidationTooltip.text = errorMsg
+        filterValidationTooltip.show(filterCombo, me.screenX, me.screenY + 15)
+      }
+    }
+    filterCombo.editor.value.onMouseExited = (me: MouseEvent) => {
+      filterValidationTooltip.hide()
+    }
+
 
     logLevelToggles.foreach { button =>
       button.onAction = (ae: ActionEvent) => filteredRows.predicate = buildPredicate()
@@ -221,13 +236,49 @@ class LogTableController(logTableView: TableView[LogRow],
       }
 
     val filterExpression = filterCombo.editor.text.get
+    val expressionPredicate = buildFilterExprPredicate(filterExpression)
+
+    expressionPredicate.map(p => toggleButtonPredicate.and(p))
+      .getOrElse(toggleButtonPredicate)
+  }
+
+  private def buildFilterExprPredicate(filterExpression: String) = {
     if (filterExpression.nonEmpty) {
-      val expressionPredicate = parseFilter(filterExpression, suppressExceptions = true)
-      toggleButtonPredicate.and(expressionPredicate)
-    } else toggleButtonPredicate
+      val expressionPredicateTest = parseFilter(filterExpression, suppressExceptions = false)
+      // test predicate on some basic data
+      testPredicate(expressionPredicateTest) match {
+        case Some(exception) =>
+          logger.warn(s"Filter predicate is not valid.", exception)
+          filterCombo.editor.value.styleClass += "error"
+          filterValidationError = Some(exceptionMessage(exception))
+          None
+        case None =>
+          filterCombo.editor.value.styleClass -= "error"
+          filterValidationError = None
+          Some(parseFilter(filterExpression, suppressExceptions = true))
+      }
+    } else None
+  }
 
-    // TODO: test predicate on some basic data
+  private def exceptionMessage(ex: Throwable): String = {
+    if (ex.getCause == null || ex.getCause == ex) ex.getLocalizedMessage
+    else ex.getLocalizedMessage + "\n" + exceptionMessage(ex.getCause)
 
+  }
+
+  private def testPredicate(pred: Predicate[LogRow]) = {
+    val time = LocalDateTime.now()
+    val logEntry = new SimpleLogEntry(LogId("testDir", "testFile", time),
+      time, LogLevel.Info, "thread-1", "session-1234","reqest-1234", "testuser",
+      "Message 12341234123412341234123412341342", 0)
+    val logRow = new LogRow(0, logEntry, resourceMgr)
+
+    try {
+      pred.test(logRow)
+      None
+    } catch {
+      case e: Exception => Some(e)
+    }
   }
 
   private def logLevelPred(level: LogLevel): Predicate[LogRow] = logRow => logRow.logEntry.level == level
@@ -244,6 +295,7 @@ class LogTableController(logTableView: TableView[LogRow],
       shell.setVariable("entry", logRow.logEntry)
       try {
         val result: AnyRef = script.run()
+        //noinspection ComparingUnrelatedTypes
         if (!result.isInstanceOf[Boolean])
           handleException(text, suppressExceptions, new InvalidFilterExpression(s"Filter expression must return Boolean value.\nExpression:\n$text"))
         result.asInstanceOf[Boolean]
@@ -258,7 +310,7 @@ class LogTableController(logTableView: TableView[LogRow],
 
   private def handleException(expr: String, suppress: Boolean, ex: Exception): Boolean = {
     if (suppress) {
-      logger.warn(s"Exception occurred during evaluation of expression:\n$expr", ex)
+      logger.warn(s"An error occurred during preparing filter expression:\n$expr", ex)
       true
     } else throw ex
   }
