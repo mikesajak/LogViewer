@@ -1,22 +1,52 @@
 package org.mikesajak.logviewer.log
-import java.util
+import java.time.LocalDateTime
 
 import com.typesafe.scalalogging.Logger
 import javafx.collections.ObservableListBase
+import org.mikesajak.logviewer.util.SearchingEx
 
-import scala.collection.JavaConverters._
+import scala.collection.Searching.{Found, InsertionPoint}
 import scala.collection.mutable.ArrayBuffer
+import scala.math.Ordering
 
-class ImmutableMemoryLogStore(input: Seq[LogEntry]) extends ObservableListBase[LogEntry] with LogStore {
-  private val entryStore = input.toIndexedSeq
-  override def entries: Seq[LogEntry] = entryStore
+class ImmutableMemoryLogStore(entryStore: IndexedSeq[LogEntry]) extends ObservableListBase[LogEntry] with LogStore {
+  override def entries: IndexedSeq[LogEntry] = entryStore
 
   override def get(index: Int): LogEntry = entryStore(index)
 
   override def size(): Int = entryStore.size
+
+  override def isEmpty: Boolean = super.isEmpty
+
+  implicit object DateTimeOrdering extends Ordering[LocalDateTime] {
+    override def compare(x: LocalDateTime, y: LocalDateTime): Int = x.compareTo(y)
+  }
+
+  override def range(start: LocalDateTime, end: LocalDateTime): LogStore = {
+    val startIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.timestamp, start) match {
+      case Found(foundIndex) => foundIndex
+      case InsertionPoint(insertionPoint) => insertionPoint
+    }
+
+    val endIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.timestamp, end) match {
+      case Found(foundIndex) => foundIndex
+      case InsertionPoint(insertionPoint) => insertionPoint
+    }
+
+    new ImmutableMemoryLogStore(new IndexedSeqRangeWrapper(entryStore, startIdx, endIdx))
+  }
+}
+
+class IndexedSeqRangeWrapper[A](internalSeq: IndexedSeq[A], startIdx: Int, endIdx: Int) extends IndexedSeq[A] {
+
+  override def length: Int = endIdx - startIdx
+
+  override def apply(idx: Int): A = internalSeq(startIdx + idx)
 }
 
 object ImmutableMemoryLogStore {
+  val empty = new ImmutableMemoryLogStore(IndexedSeq.empty)
+
   class Builder {
     private val logger = Logger[ImmutableMemoryLogStore.Builder]
     private val entries = new ArrayBuffer[LogEntry](1000000)
@@ -31,51 +61,5 @@ object ImmutableMemoryLogStore {
       new ImmutableMemoryLogStore(entries.sortWith((e1, e2) => e1.timestamp.isBefore(e2.timestamp)))
     }
 
-  }
-}
-
-class SimpleMemoryLogStore(initialEntries: Seq[LogEntry]) extends ObservableListBase[LogEntry] with LogStore {
-  private val logger = Logger[SimpleMemoryLogStore]
-
-  private val logEntries = new util.ArrayList[LogEntry](initialEntries.size)
-  private var newEntries = new util.ArrayList[LogEntry](initialEntries.size)
-
-  initialEntries.foreach(newEntries.add(_))
-
-  def this() = this(List.empty)
-
-  override def entries: Seq[LogEntry] = synchronized {
-    logEntries.asScala.toList
-  }
-
-  override def get(index: Int): LogEntry = synchronized {
-    sort()
-    entries(index)
-  }
-
-  override def size(): Int = synchronized {
-    entries.size + newEntries.size
-  }
-
-  def sort(): Unit = synchronized {
-    if (!newEntries.isEmpty) {
-      logEntries.addAll(newEntries)
-      logEntries.sort((e1, e2) => e1.timestamp.compareTo(e2.timestamp))
-      newEntries.clear()
-    }
-  }
-
-  def add(toAdd: Seq[LogEntry]): Unit = synchronized {
-    newEntries.ensureCapacity(newEntries.size + toAdd.size)
-    toAdd.foreach(newEntries.add(_))
-
-    logger.debug(s"Added ${toAdd.size} entries to log store. Current size: ${size()}")
-  }
-
-}
-
-object SimpleMemoryLogStore {
-  def apply(entries: Seq[LogEntry]): LogStore = {
-    new SimpleMemoryLogStore(entries.toIndexedSeq)
   }
 }

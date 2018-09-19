@@ -8,8 +8,17 @@ import javafx.collections.transformation.TransformationList
 
 class MappedObservableList[E, F](source: ObservableList[_ <: F], mapper: F => E) extends TransformationList[E, F](source) {
 
+  private val cache = new util.WeakHashMap[Int, E]()
+
   override def getSourceIndex(index: Int): Int = index
-  override def get(index: Int): E = mapper(getSource.get(index))
+  override def get(index: Int): E = {
+    var cachedValue = cache.get(index)
+    if (cachedValue == null) {
+      cachedValue = mapper(getSource.get(index))
+      cache.put(index, cachedValue)
+    }
+    cachedValue
+  }
   override def size(): Int = getSource.size()
 
   override def sourceChanged(c: ListChangeListener.Change[_ <: F]): Unit = {

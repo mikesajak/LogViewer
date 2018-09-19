@@ -7,17 +7,14 @@ import java.util.function.Predicate
 import com.google.common.eventbus.Subscribe
 import com.typesafe.scalalogging.Logger
 import groovy.lang.GroovyShell
-import javafx.collections.ObservableList
 import org.mikesajak.logviewer.log._
-import org.mikesajak.logviewer.ui.MappedObservableList
+import org.mikesajak.logviewer.ui.{FilteredObservableList, MappedObservableList}
 import org.mikesajak.logviewer.util.Measure.measure
 import org.mikesajak.logviewer.util.{EventBus, ResourceManager}
 import scalafx.Includes._
 import scalafx.application.Platform
 import scalafx.beans.property.{ObjectProperty, StringProperty}
 import scalafx.collections.ObservableBuffer
-import scalafx.collections.transformation.FilteredBuffer
-import scalafx.css.PseudoClass
 import scalafx.event.ActionEvent
 import scalafx.scene.CacheHint
 import scalafx.scene.control._
@@ -91,8 +88,9 @@ class LogTableController(logTableView: TableView[LogRow],
   private implicit val logger: Logger = Logger[LogTableController]
 
   private var tableRows = ObservableBuffer[LogRow]()
-  private var filteredRows = new FilteredBuffer(tableRows)
-//  private var sortedRows = new SortedBuffer(filteredRows)
+  private var currentPredicate = (logRow: LogRow) => true
+
+  private var logStore: LogStore = ImmutableMemoryLogStore.empty
 
   private val logLevelToggles = Seq(errorLevelToggle, warnLevelToggle, infoLevelToggle, debugLevelToggle, traceLevelToggle)
   private val logLevelStyleClassMap = Map[LogLevel, String](
@@ -137,7 +135,6 @@ class LogTableController(logTableView: TableView[LogRow],
               tableRow.value.styleClass --= logLevelStyleClassMap.values
               tableRow.value.styleClass -= "other"
               tableRow.value.styleClass += logLevelStyleClassMap.getOrElse(logEntry.level, "other")
-              println("aaa")
             }
           }
         }
@@ -177,7 +174,7 @@ class LogTableController(logTableView: TableView[LogRow],
 
     splitPane.vgrow = Priority.Always
 
-    initLogRows(new ObservableBuffer[LogEntry]())
+    initLogRows(ImmutableMemoryLogStore.empty, _ => true)
 
     searchCombo.onAction = (ae: ActionEvent) => logger.info(s"Search combo ENTER, text=${searchCombo.editor.text.get()}")
 
@@ -199,10 +196,8 @@ class LogTableController(logTableView: TableView[LogRow],
 
     filterCombo.onAction = (ae: ActionEvent) => {
       val filterText = filterCombo.editor.text.get()
-      logger.info(s"Filter combo action, text=$filterText")
-      measure("Setting filter predicate") { () =>
-        filteredRows.predicate = buildPredicate()
-      }
+      logger.debug(s"Filter combo action, text=$filterText")
+      setFilterPredicate(buildPredicate())
     }
 
     val filterValidationTooltip = new Tooltip()
@@ -218,7 +213,7 @@ class LogTableController(logTableView: TableView[LogRow],
 
 
     logLevelToggles.foreach { button =>
-      button.onAction = (ae: ActionEvent) => filteredRows.predicate = buildPredicate()
+      button.onAction = (ae: ActionEvent) => setFilterPredicate(buildPredicate())
     }
 
     eventBus.register(this)
@@ -238,8 +233,10 @@ class LogTableController(logTableView: TableView[LogRow],
     val filterExpression = filterCombo.editor.text.get
     val expressionPredicate = buildFilterExprPredicate(filterExpression)
 
-    expressionPredicate.map(p => toggleButtonPredicate.and(p))
+    val p = expressionPredicate.map(p => toggleButtonPredicate.and(p))
       .getOrElse(toggleButtonPredicate)
+
+    logRow: LogRow => p.test(logRow) // TODO: fixme, it's a temporary hack to make it quickly working, redesign this to use scala predicate
   }
 
   private def buildFilterExprPredicate(filterExpression: String) = {
@@ -339,35 +336,34 @@ class LogTableController(logTableView: TableView[LogRow],
   def onLogOpened(request: SetNewLogEntries): Unit = {
     logger.debug(s"New log requset received, ${request.logStore.size} entries")
 
-//    val rows = toRows(request.logStore.entries)
-
     measure("Setting table rows") { () =>
-//      tableRows.setAll(rows.asJava)
-      initLogRows(request.logStore)
+      initLogRows(request.logStore, currentPredicate)
     }
   }
 
-  private def initLogRows(logEntries: ObservableList[LogEntry]): Unit = {
-    tableRows = new MappedObservableList[LogRow, LogEntry](logEntries, entry => new LogRow(0, entry, resourceMgr))
-    filteredRows = new FilteredBuffer(tableRows)
-//    sortedRows = new SortedBuffer(filteredRows)
+  private def initLogRows(logStore: LogStore, predicate: LogRow => Boolean): Unit = {
+    this.logStore = logStore
+    tableRows = new MappedObservableList[LogRow, LogEntry](logStore, entry => new LogRow(0, entry, resourceMgr))
+    setFilterPredicate(predicate)
+  }
 
+  private def setFilterPredicate(predicate: LogRow => Boolean): Unit = {
+    val filteredRows = measure("Preparing filtered view") { () =>
+      new FilteredObservableList[LogRow](tableRows, predicate)
+    }
     logTableView.items = filteredRows
 
+    val statusMessage =
+      if (logStore.isEmpty) s"${logStore.size} log entries."
+      else {
+        val firstTimestamp = logStore.entries.head.timestamp
+        val lastTimestamp = logStore.entries.last.timestamp
+        s"${logStore.size} log total entries, ${filteredRows.size} filtered log entries, time range: ${LogRow.dateTimeFormatter.format(firstTimestamp)} - ${LogRow.dateTimeFormatter.format(lastTimestamp)}"
+      }
+
     Platform.runLater {
-      statusLabel.text = s"${logEntries.size} log entries"
+      statusLabel.text = statusMessage
     }
   }
-
-  @Subscribe
-  def onLogFinished(request: FinishLogEntries): Unit = {
-    logger.debug("Finish adding log enties")
-  }
-
-//  private def toRows(entries: Seq[LogEntry]) =
-//    measure("Converting log entries into rows") { () =>
-//      entries.view.zipWithIndex
-//        .map { case (entry,idx) => new LogRow(idx, entry, resourceMgr) }
-//  }
 
 }

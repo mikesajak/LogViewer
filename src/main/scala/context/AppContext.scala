@@ -2,11 +2,11 @@ package context
 
 import com.google.inject._
 import net.codingwell.scalaguice.ScalaModule
-import org.mikesajak.logviewer.{AppController, OperationMgr}
 import org.mikesajak.logviewer.config.Configuration
-import org.mikesajak.logviewer.log.{LogParserMgr, LogStore, SimpleMemoryLogStore}
+import org.mikesajak.logviewer.log.{GlobalState, LogParserMgr}
 import org.mikesajak.logviewer.ui.ConsoleProgressHandler
 import org.mikesajak.logviewer.util.{EventBus, ResourceManager}
+import org.mikesajak.logviewer.{AppController, OperationMgr}
 
 class AppContext extends AbstractModule with ScalaModule {
   override def configure(): Unit = {
@@ -56,8 +56,12 @@ class LogStoreContext extends AbstractModule with ScalaModule {
 
   @Provides
   @Singleton
-  def provideLogParserMgr(eventBus: EventBus): LogParserMgr =
-    new LogParserMgr(eventBus)
+  def provideGlobalState(): GlobalState = new GlobalState
+
+  @Provides
+  @Singleton
+  def provideLogParserMgr(eventBus: EventBus, globalState: GlobalState): LogParserMgr =
+    new LogParserMgr(eventBus, globalState)
 }
 
 object AppContext {

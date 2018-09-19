@@ -2,6 +2,7 @@ package org.mikesajak.logviewer.util
 
 import com.google.common.base.Stopwatch
 import com.typesafe.scalalogging.Logger
+import org.mikesajak.logviewer.util.LoggingLevel.Debug
 
 object Measure {
   def measure[A](f: () => A)(logF: Stopwatch => Unit): A = {
@@ -20,11 +21,11 @@ object Measure {
     result
   }
 
-  def measure[A](name: String)(f: () => A)(implicit logger: Logger): A = {
+  def measure[A](name: String, logLevel: LoggingLevel = Debug)(f: () => A)(implicit logger: Logger): A = {
     val stopwatch = Stopwatch.createStarted()
     val result = f()
     stopwatch.stop()
-    logger.debug(s"$name finished in $stopwatch")
+    Logging.log(s"$name finished in $stopwatch", logLevel)
     result
   }
 }

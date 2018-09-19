@@ -9,8 +9,11 @@
   <menus>
     <Menu mnemonicParsing="false" text="File">
       <items>
-            <MenuItem mnemonicParsing="false" onAction="#onDirOpen" text="Open log directory..." />
-            <MenuItem mnemonicParsing="false" onAction="#onFilesOpen" text="Open log files..." />
+            <MenuItem mnemonicParsing="false" onAction="#onDirOpen" text="Open new logs directory..." />
+            <MenuItem mnemonicParsing="false" onAction="#onFilesOpen" text="Open new log file(s)..." />
+            <SeparatorMenuItem mnemonicParsing="false" />
+            <MenuItem mnemonicParsing="false" onAction="#onDirAppend" text="Append logs from directory..." />
+            <MenuItem mnemonicParsing="false" onAction="#onFilesAppend" text="Append logs from file(s)..." />
             <SeparatorMenuItem mnemonicParsing="false" />
         <MenuItem mnemonicParsing="false" onAction="#onFileClose" text="Close" />
       </items>
