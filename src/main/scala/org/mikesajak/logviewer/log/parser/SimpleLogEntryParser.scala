@@ -7,7 +7,7 @@ import org.mikesajak.logviewer.log._
 
 class SimpleLogEntryParser(idGenerator: IdGenerator) extends LogEntryParser {
   private val logLineStartPattern = """(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})\s+(ERROR|WARNING|WARN|INFO|DEBUG|TRACE)""".r
-  private val LogLinePattern = """^(?s)(?<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[\.,]\d{3})\s+(?<level>ERROR|WARNING|WARN|INFO|DEBUG|TRACE)\s+\[(?<thread>.*?)\]\s+\[(?:(?<sessionId>.*?),(?<requestId>.*?),by,(?<userId>.*?))?\]\s+(?<body>.+)$""".r
+  private val LogLinePattern = """^(?s)(?<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[\.,]\d{3})\s+(?<level>ERROR|WARNING|WARN|INFO|DEBUG|TRACE)\s+\[(?<thread>.*?)\]\s+\[<?(?:(?<sessionId>.*?),(?<requestId>.*?),by,(?<userId>.*?))?>?\]\s+(?<body>.+)$""".r
   private val dateTimeFormatters = Seq(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss,SSS"),
                                        DateTimeFormatter.ofPattern("dd-MM-yyy HH:mm:ss"),
                                        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")).view

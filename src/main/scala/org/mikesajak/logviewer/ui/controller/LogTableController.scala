@@ -7,6 +7,7 @@ import java.util.function.Predicate
 import com.google.common.eventbus.Subscribe
 import com.typesafe.scalalogging.Logger
 import groovy.lang.GroovyShell
+import javafx.collections.ObservableList
 import org.mikesajak.logviewer.log._
 import org.mikesajak.logviewer.ui.{FilteredObservableList, MappedObservableList}
 import org.mikesajak.logviewer.util.Measure.measure
@@ -31,7 +32,7 @@ object LogRow {
   val dateTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
 }
 
-class LogRow(index: Int, val logEntry: LogEntry, resourceMgr: ResourceManager) {
+case class LogRow(index: Int, logEntry: LogEntry, resourceMgr: ResourceManager) {
   import LogRow._
 
   val idx = new StringProperty(index.toString)
@@ -45,19 +46,19 @@ class LogRow(index: Int, val logEntry: LogEntry, resourceMgr: ResourceManager) {
   val userId = new StringProperty(logEntry.userId)
   val body = new StringProperty(whiteSpacePattern.replaceAllIn(logEntry.body, "\\\\n"))
 
-  def canEqual(other: Any): Boolean = other.isInstanceOf[LogRow]
-
-  override def equals(other: Any): Boolean = other match {
-    case that: LogRow =>
-      (that canEqual this) &&
-        logEntry.id == that.logEntry.id
-    case _ => false
-  }
-
-  override def hashCode(): Int = {
-    val state = Seq(logEntry.id)
-    state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
-  }
+//  def canEqual(other: Any): Boolean = other.isInstanceOf[LogRow]
+//
+//  override def equals(other: Any): Boolean = other match {
+//    case that: LogRow =>
+//      (that canEqual this) &&
+//        logEntry.id == that.logEntry.id
+//    case _ => false
+//  }
+//
+//  override def hashCode(): Int = {
+//    val state = Seq(logEntry.id)
+//    state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
+//  }
 }
 
 @sfxml
@@ -74,8 +75,8 @@ class LogTableController(logTableView: TableView[LogRow],
                          bodyColumn: TableColumn[LogRow, String],
                          selEntryTextArea: TextArea,
 
-                         searchCombo: ComboBox[String],
-                         filterCombo: ComboBox[String],
+                         searchCombo: ComboBox[String], clearSearchButton: Button,
+                         filterCombo: ComboBox[String], clearFilterButton: Button,
 
                          errorLevelToggle: ToggleButton, warnLevelToggle: ToggleButton, infoLevelToggle: ToggleButton,
                          debugLevelToggle: ToggleButton, traceLevelToggle: ToggleButton, otherLevelToggle: ToggleButton,
@@ -87,12 +88,20 @@ class LogTableController(logTableView: TableView[LogRow],
                          eventBus: EventBus) {
   private implicit val logger: Logger = Logger[LogTableController]
 
-  private var tableRows = ObservableBuffer[LogRow]()
-  private var currentPredicate = (logRow: LogRow) => true
+  type FilterPredicate = LogRow => Boolean
+
+  private var tableRows: ObservableList[LogRow] = ObservableBuffer[LogRow]()
+  private var currentPredicate: Option[FilterPredicate] = None
+  private var filterStack = IndexedSeq[FilterPredicate]()
 
   private var logStore: LogStore = ImmutableMemoryLogStore.empty
 
   private val logLevelToggles = Seq(errorLevelToggle, warnLevelToggle, infoLevelToggle, debugLevelToggle, traceLevelToggle)
+  private val logLevelToggles2 = Seq((errorLevelToggle, LogLevel.Error),
+                                     (warnLevelToggle, LogLevel.Warning),
+                                     (infoLevelToggle, LogLevel.Info),
+                                     (debugLevelToggle, LogLevel.Debug),
+                                     (traceLevelToggle, LogLevel.Trace))
   private val logLevelStyleClassMap = Map[LogLevel, String](
     LogLevel.Error   -> "error",
     LogLevel.Warning -> "warn",
@@ -100,6 +109,7 @@ class LogTableController(logTableView: TableView[LogRow],
     LogLevel.Debug   -> "debug",
     LogLevel.Trace   -> "trace"
   )
+
   private var filterValidationError: Option[String] = None
 
   init()
@@ -174,7 +184,7 @@ class LogTableController(logTableView: TableView[LogRow],
 
     splitPane.vgrow = Priority.Always
 
-    initLogRows(ImmutableMemoryLogStore.empty, _ => true)
+    initLogRows(ImmutableMemoryLogStore.empty, None)
 
     searchCombo.onAction = (ae: ActionEvent) => logger.info(s"Search combo ENTER, text=${searchCombo.editor.text.get()}")
 
@@ -219,27 +229,21 @@ class LogTableController(logTableView: TableView[LogRow],
     eventBus.register(this)
   }
 
-  private def buildPredicate() = {
+  private def buildPredicate(): Option[FilterPredicate] = {
     val toggleButtonPredicate =
-      if (logLevelToggles.forall(!_.isSelected)) null
-      else {
-        togglePred(errorLevelToggle).and(logLevelPred(LogLevel.Error)) or
-          togglePred(warnLevelToggle).and(logLevelPred(LogLevel.Warning)) or
-          togglePred(infoLevelToggle).and(logLevelPred(LogLevel.Info)) or
-          togglePred(debugLevelToggle).and(logLevelPred(LogLevel.Debug)) or
-          togglePred(traceLevelToggle).and(logLevelPred(LogLevel.Trace))
-      }
+      if (logLevelToggles.forall(!_.isSelected)) None
+      else logLevelPred(logLevelToggles2)
 
     val filterExpression = filterCombo.editor.text.get
     val expressionPredicate = buildFilterExprPredicate(filterExpression)
 
-    val p = expressionPredicate.map(p => toggleButtonPredicate.and(p))
-      .getOrElse(toggleButtonPredicate)
-
-    logRow: LogRow => p.test(logRow) // TODO: fixme, it's a temporary hack to make it quickly working, redesign this to use scala predicate
+    val predicate = Seq(toggleButtonPredicate, expressionPredicate)
+                      .flatten
+                      .reduceLeftOption((resultPred, curPred) => (logRow: LogRow) => resultPred(logRow) && curPred(logRow))
+    predicate
   }
 
-  private def buildFilterExprPredicate(filterExpression: String) = {
+  private def buildFilterExprPredicate(filterExpression: String): Option[FilterPredicate] = {
     if (filterExpression.nonEmpty) {
       val expressionPredicateTest = parseFilter(filterExpression, suppressExceptions = false)
       // test predicate on some basic data
@@ -260,10 +264,9 @@ class LogTableController(logTableView: TableView[LogRow],
   private def exceptionMessage(ex: Throwable): String = {
     if (ex.getCause == null || ex.getCause == ex) ex.getLocalizedMessage
     else ex.getLocalizedMessage + "\n" + exceptionMessage(ex.getCause)
-
   }
 
-  private def testPredicate(pred: Predicate[LogRow]) = {
+  private def testPredicate(pred: FilterPredicate) = {
     val time = LocalDateTime.now()
     val logEntry = new SimpleLogEntry(LogId("testDir", "testFile", time),
       time, LogLevel.Info, "thread-1", "session-1234","reqest-1234", "testuser",
@@ -271,24 +274,29 @@ class LogTableController(logTableView: TableView[LogRow],
     val logRow = new LogRow(0, logEntry, resourceMgr)
 
     try {
-      pred.test(logRow)
+      pred(logRow)
       None
     } catch {
       case e: Exception => Some(e)
     }
   }
 
-  private def logLevelPred(level: LogLevel): Predicate[LogRow] = logRow => logRow.logEntry.level == level
-  private def togglePred(toggle: ToggleButton): Predicate[LogRow] = logRow => toggle.isSelected
+  private def logLevelPred(logToggles: Seq[(ToggleButton, LogLevel)]): Option[FilterPredicate] = {
+    logToggles.flatMap { case (toggle, level) => logLevelPred(toggle, level) }
+      .reduceLeftOption((p1, p2) => (logRow: LogRow) => p1(logRow) || p2(logRow))
+  }
+
+  private def logLevelPred(toggle: ToggleButton, level: LogLevel): Option[FilterPredicate] =
+    if (toggle.isSelected) Some(logRow => logRow.logEntry.level == level)
+    else None //logRow => toggle.isSelected && logRow.logEntry.level == level
 
   class InvalidFilterExpression(message: String) extends Exception(message)
   class FilterExpressionError(message: String, cause: Exception) extends Exception(message, cause)
 
-  private def parseFilter(text: String, suppressExceptions: Boolean) = {
+  private def parseFilter(text: String, suppressExceptions: Boolean): FilterPredicate = {
     val shell = new GroovyShell()
     val script = shell.parse(text)
-
-    val predicate: Predicate[LogRow] = { logRow =>
+    logRow: LogRow => {
       shell.setVariable("entry", logRow.logEntry)
       try {
         val result: AnyRef = script.run()
@@ -302,7 +310,6 @@ class LogTableController(logTableView: TableView[LogRow],
       }
     }
 
-    predicate
   }
 
   private def handleException(expr: String, suppress: Boolean, ex: Exception): Boolean = {
@@ -341,24 +348,29 @@ class LogTableController(logTableView: TableView[LogRow],
     }
   }
 
-  private def initLogRows(logStore: LogStore, predicate: LogRow => Boolean): Unit = {
+  private def initLogRows(logStore: LogStore, predicate: Option[FilterPredicate]): Unit = {
     this.logStore = logStore
     tableRows = new MappedObservableList[LogRow, LogEntry](logStore, entry => new LogRow(0, entry, resourceMgr))
     setFilterPredicate(predicate)
   }
 
-  private def setFilterPredicate(predicate: LogRow => Boolean): Unit = {
-    val filteredRows = measure("Preparing filtered view") { () =>
-      new FilteredObservableList[LogRow](tableRows, predicate)
-    }
-    logTableView.items = filteredRows
+  private def setFilterPredicate(predicateOption: Option[FilterPredicate]): Unit = {
+
+    val visibleItemsList =
+      predicateOption.map { predicate =>
+        measure("Preparing filtered view") { () =>
+          new FilteredObservableList[LogRow](tableRows, predicate)
+        }
+      }.getOrElse(tableRows)
+
+    logTableView.items = visibleItemsList
 
     val statusMessage =
       if (logStore.isEmpty) s"${logStore.size} log entries."
       else {
         val firstTimestamp = logStore.entries.head.timestamp
         val lastTimestamp = logStore.entries.last.timestamp
-        s"${logStore.size} log total entries, ${filteredRows.size} filtered log entries, time range: ${LogRow.dateTimeFormatter.format(firstTimestamp)} - ${LogRow.dateTimeFormatter.format(lastTimestamp)}"
+        s"${logStore.size} log total entries, ${logTableView.items.value.size} filtered log entries, time range: ${LogRow.dateTimeFormatter.format(firstTimestamp)} - ${LogRow.dateTimeFormatter.format(lastTimestamp)}"
       }
 
     Platform.runLater {

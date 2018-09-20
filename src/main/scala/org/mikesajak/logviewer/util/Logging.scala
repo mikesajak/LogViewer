@@ -20,17 +20,17 @@ object LoggingLevel extends Enum[LoggingLevel] {
 object Logging {
   def log(message: => String, level: LoggingLevel)(implicit logger: Logger): Unit = level match {
     case LoggingLevel.Error => logger.error(message)
-    case LoggingLevel.Warning => logger.error(message)
-    case LoggingLevel.Info => logger.error(message)
-    case LoggingLevel.Debug => logger.error(message)
-    case LoggingLevel.Trace => logger.error(message)
+    case LoggingLevel.Warning => logger.warn(message)
+    case LoggingLevel.Info => logger.info(message)
+    case LoggingLevel.Debug => logger.debug(message)
+    case LoggingLevel.Trace => logger.trace(message)
   }
 
   def log(message: => String, exception: Throwable, level: LoggingLevel)(implicit logger: Logger): Unit = level match {
     case LoggingLevel.Error => logger.error(message, exception)
-    case LoggingLevel.Warning => logger.error(message, exception)
-    case LoggingLevel.Info => logger.error(message, exception)
-    case LoggingLevel.Debug => logger.error(message, exception)
-    case LoggingLevel.Trace => logger.error(message, exception)
+    case LoggingLevel.Warning => logger.warn(message, exception)
+    case LoggingLevel.Info => logger.info(message, exception)
+    case LoggingLevel.Debug => logger.debug(message, exception)
+    case LoggingLevel.Trace => logger.trace(message, exception)
   }
 }
