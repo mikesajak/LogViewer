@@ -12,12 +12,13 @@ trait LogEntry extends Ordering[LogEntry] {
   def sessionId: String
   def requestId: String
   def userId: String
-  def body: String
-
+  def bodyIdx: Int
   def rawMessage: String
+
+  def body: String = rawMessage.substring(bodyIdx)
 
   // Ordering
   override def compare(x: LogEntry, y: LogEntry): Int = x.timestamp.compareTo(y.timestamp)
 
-  override def toString = s"LogEntry(id=$id, time=$timestamp, dil=$directory, file/$file, level=$level, thread=$thread, session=$sessionId, request=$requestId, user=$userId, body=$body)"
+  override def toString = s"LogEntry(id=$id, time=$timestamp, dil=$directory, file/$file, level=$level, thread=$thread, session=$sessionId, request=$requestId, user=$userId, body=$bodyIdx)"
 }

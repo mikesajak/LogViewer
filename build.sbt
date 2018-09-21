@@ -32,6 +32,10 @@ libraryDependencies += "com.beachape" %% "enumeratum" % "1.5.13"
 // https://mvnrepository.com/artifact/org.codehaus.groovy/groovy-jsr223
 libraryDependencies += "org.codehaus.groovy" % "groovy-jsr223" % "2.5.2"
 
+// https://mvnrepository.com/artifact/org.dizitart/nitrite
+libraryDependencies += "org.dizitart" % "nitrite" % "3.1.0"
+
+
 // testing
 libraryDependencies += "org.scalactic" %% "scalactic" % "3.0.1"
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.1" % "test"

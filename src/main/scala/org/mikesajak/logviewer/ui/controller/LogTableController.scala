@@ -368,8 +368,8 @@ class LogTableController(logTableView: TableView[LogRow],
     val statusMessage =
       if (logStore.isEmpty) s"${logStore.size} log entries."
       else {
-        val firstTimestamp = logStore.entries.head.timestamp
-        val lastTimestamp = logStore.entries.last.timestamp
+        val firstTimestamp = logStore.first.timestamp
+        val lastTimestamp = logStore.last.timestamp
         s"${logStore.size} log total entries, ${logTableView.items.value.size} filtered log entries, time range: ${LogRow.dateTimeFormatter.format(firstTimestamp)} - ${LogRow.dateTimeFormatter.format(lastTimestamp)}"
       }
 

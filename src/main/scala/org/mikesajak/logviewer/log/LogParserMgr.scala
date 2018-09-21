@@ -44,7 +44,10 @@ class LogParserMgr(eventBus: EventBus, globalState: GlobalState) {
 //    eventBus.publish(SetNewLogEntries(ImmutableMemoryLogStore.empty)) // release memory, before parsing
     Future {
       val logStoreBuilder = new ImmutableMemoryLogStore.Builder()
-      logStoreBuilder.add(globalState.currentLogStore.entries)
+
+      globalState.currentLogStore.iterator
+        .foreach(e => logStoreBuilder.add(e))
+//      logStoreBuilder.add(globalState.currentLogStore.iterator)
 //      globalState.currentLogStore = ImmutableMemoryLogStore.empty
 
       parseLogs(request.files, logStoreBuilder)

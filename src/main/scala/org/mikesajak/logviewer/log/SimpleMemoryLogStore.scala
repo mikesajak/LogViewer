@@ -10,13 +10,15 @@ import scala.collection.mutable.ArrayBuffer
 import scala.math.Ordering
 
 class ImmutableMemoryLogStore(entryStore: IndexedSeq[LogEntry]) extends ObservableListBase[LogEntry] with LogStore {
-  override def entries: IndexedSeq[LogEntry] = entryStore
+  def entries: IndexedSeq[LogEntry] = entryStore
 
   override def get(index: Int): LogEntry = entryStore(index)
 
   override def size(): Int = entryStore.size
 
-  override def isEmpty: Boolean = super.isEmpty
+  override def isEmpty: Boolean = entries.isEmpty
+
+  override def nonEmpty: Boolean = entries.nonEmpty
 
   implicit object DateTimeOrdering extends Ordering[LocalDateTime] {
     override def compare(x: LocalDateTime, y: LocalDateTime): Int = x.compareTo(y)
@@ -52,6 +54,10 @@ object ImmutableMemoryLogStore {
     private val entries = new ArrayBuffer[LogEntry](1000000)
 
     def size: Int = entries.size
+
+    def add(entry: LogEntry): Unit = {
+      entries += entry
+    }
 
     def add(batch: Seq[LogEntry]): Unit = {
       entries ++= batch
