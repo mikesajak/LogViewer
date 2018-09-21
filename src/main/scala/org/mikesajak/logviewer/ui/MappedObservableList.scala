@@ -5,8 +5,9 @@ import java.util
 import javafx.collections.ListChangeListener.Change
 import javafx.collections.{ListChangeListener, ObservableList}
 import javafx.collections.transformation.TransformationList
+import collection.JavaConverters._
 
-class MappedObservableList[E, F](source: ObservableList[_ <: F], mapper: F => E) extends TransformationList[E, F](source) {
+class MappedObservableList[E, F](source: ObservableList[_ <: F], val mapper: F => E) extends TransformationList[E, F](source) {
 
   private val cache = new util.WeakHashMap[Int, E]()
 
@@ -42,6 +43,55 @@ class MappedObservableList[E, F](source: ObservableList[_ <: F], mapper: F => E)
       override def getRemoved: util.List[E] = {
         val res = new util.ArrayList[E](c.getRemovedSize)
         c.getRemoved.forEach(e => res.add(mapper(e)))
+        res
+      }
+
+      override def getFrom: Int = c.getFrom
+      override def getTo: Int = c.getTo
+
+      override def next(): Boolean = c.next()
+      override def reset(): Unit = c.reset()
+    })
+  }
+}
+
+
+class MappedIndexedObservableList[E, F](source: ObservableList[_ <: F], val mapper: (Int, F) => E) extends TransformationList[E, F](source) {
+
+  private val cache = new util.WeakHashMap[Int, E]()
+
+  override def getSourceIndex(index: Int): Int = index
+  override def get(index: Int): E = {
+    var cachedValue = cache.get(index)
+    if (cachedValue == null) {
+      cachedValue = mapper(index, getSource.get(index))
+      cache.put(index, cachedValue)
+    }
+    cachedValue
+  }
+  override def size(): Int = getSource.size()
+
+  override def sourceChanged(c: ListChangeListener.Change[_ <: F]): Unit = {
+    fireChange(new Change[E](this) {
+      override def wasAdded(): Boolean = c.wasAdded()
+      override def wasRemoved(): Boolean = c.wasRemoved()
+      override def wasReplaced(): Boolean = c.wasReplaced()
+      override def wasUpdated(): Boolean = c.wasUpdated()
+      override def wasPermutated(): Boolean = c.wasPermutated()
+
+      override def getPermutation(i: Int): Int = c.getPermutation(i)
+
+      override def getPermutation: Array[Int] = {
+        // This method is only called by the superclass methods
+        // wasPermutated() and getPermutation(int), which are
+        // both overriden by this class. There is no other way
+        // this method can be called.
+        throw new AssertionError("Unreachable code")
+      }
+
+      override def getRemoved: util.List[E] = {
+        val res = new util.ArrayList[E](c.getRemovedSize)
+        c.getRemoved.asScala.zipWithIndex.foreach(e => res.add(mapper(e._2, e._1)))
         res
       }
 

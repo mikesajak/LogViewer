@@ -24,9 +24,9 @@ class LogParserTest extends FlatSpec with Matchers {
         |2015-10-23 16:13:45,770 DEBUG [Qbaba-3] [2@ddd.eee.fff] one two three four five six seven eight night ten
       """.stripMargin
 
-    val entries = parser.parse(dataSource(log),
-                               new SimpleLogEntryParser(new SimpleLogIdGenerator("testDir", "testFile")))
-        .toIndexedSeq
+    val entries = parser.parse(dataSource(log), new SimpleLogEntryParser(new SimpleFileParserContext("testDir", "testFile"),
+                                                                         new SimpleLogIdGenerator()))
+      .toIndexedSeq
 
     entries.size shouldBe 7
   }
@@ -51,9 +51,9 @@ class LogParserTest extends FlatSpec with Matchers {
         |2015-10-23 16:13:45,770 DEBUG [Qbaba-3] [2@ddd.eee.fff] one two three four five six seven eight night ten
       """.stripMargin
 
-    val entries = parser.parse(dataSource(log),
-                               new SimpleLogEntryParser(new SimpleLogIdGenerator("testDir", "testFile")))
-        .toIndexedSeq
+    val entries = parser.parse(dataSource(log), new SimpleLogEntryParser(new SimpleFileParserContext("testDir", "testFile"),
+                                                                         new SimpleLogIdGenerator()))
+                  .toIndexedSeq
 
     entries.size shouldBe 7
   }
@@ -66,8 +66,8 @@ class LogParserTest extends FlatSpec with Matchers {
         |2015-10-23 16:12:21,820 DEBUG [test4321-1] [] one two three four five six seven eight night ten
       """.stripMargin
 
-    val entries = parser.parse(dataSource(log),
-      new SimpleLogEntryParser(new SimpleLogIdGenerator("testDir", "testFile")))
+    val entries = parser.parse(dataSource(log), new SimpleLogEntryParser(new SimpleFileParserContext("testDir", "testFile"),
+                                                                         new SimpleLogIdGenerator()))
                   .toIndexedSeq
 
     entries.size shouldBe 2

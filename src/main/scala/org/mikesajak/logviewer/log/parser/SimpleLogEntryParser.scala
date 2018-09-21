@@ -5,7 +5,7 @@ import java.time.format.DateTimeFormatter
 
 import org.mikesajak.logviewer.log._
 
-class SimpleLogEntryParser(idGenerator: IdGenerator) extends LogEntryParser {
+class SimpleLogEntryParser(parserContext: ParserContext, idGenerator: IdGenerator) extends LogEntryParser {
   private val logLineStartPattern = """(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})\s+(ERROR|WARNING|WARN|INFO|DEBUG|TRACE)""".r
   private val LogLinePattern = """^(?s)(?<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[\.,]\d{3})\s+(?<level>ERROR|WARNING|WARN|INFO|DEBUG|TRACE)\s+\[(?<thread>.*?)\]\s+\[<?(?:(?<sessionId>.*?),(?<requestId>.*?),by,(?<userId>.*?))?>?\]\s+(?<body>.+)$""".r
   private val dateTimeFormatters = Seq(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss,SSS"),
@@ -26,7 +26,7 @@ class SimpleLogEntryParser(idGenerator: IdGenerator) extends LogEntryParser {
                                           .collectFirst { case Some(ts) => ts }
                                           .get // TODO what if date does not match - add error handler
 
-        Some(new SimpleLogEntry(idGenerator.genId(timestamp), timestamp, LogLevel.of(levelStr),
+        Some(new SimpleLogEntry(idGenerator.genId(parserContext, timestamp), LogLevel.of(levelStr),
                                 thread, sessionId, requestId, userId, entryStr, entryStr.length - body.length))
 
       case _ => None

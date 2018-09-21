@@ -5,11 +5,12 @@ import java.io.File
 import com.google.common.base.Stopwatch
 import com.google.common.eventbus.Subscribe
 import com.typesafe.scalalogging.Logger
-import org.mikesajak.logviewer.{AppendLogRequest, OpenLogRequest}
 import org.mikesajak.logviewer.log.parser._
 import org.mikesajak.logviewer.util.EventBus
 import org.mikesajak.logviewer.util.Measure.measure
+import org.mikesajak.logviewer.{AppendLogRequest, OpenLogRequest}
 
+import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import scala.util.matching.Regex
 
@@ -45,8 +46,9 @@ class LogParserMgr(eventBus: EventBus, globalState: GlobalState) {
     Future {
       val logStoreBuilder = new ImmutableMemoryLogStore.Builder()
 
-      globalState.currentLogStore.iterator
-        .foreach(e => logStoreBuilder.add(e))
+      for (e <- globalState.currentLogStore.iterator.asScala)
+        logStoreBuilder.add(e)
+
 //      logStoreBuilder.add(globalState.currentLogStore.iterator)
 //      globalState.currentLogStore = ImmutableMemoryLogStore.empty
 
@@ -65,14 +67,17 @@ class LogParserMgr(eventBus: EventBus, globalState: GlobalState) {
     val filesToParse = inputPaths.view
       .flatMap(f => traverseDir(f, logFilePattern))
 
+    // TODO: smarter log source definition - use list of input directories, and map directly to source dir->file
+
     logger.debug(s"Found ${filesToParse.length} files to parse: $filesToParse")
 
     measure(s"Parsing ${filesToParse.size} log files from ${inputPaths.map(_.getName)}") { () =>
       for ((inputFile, idx) <- filesToParse.zipWithIndex) {
         val stopwatch = Stopwatch.createStarted()
 
-        val idGenerator = new SimpleLogIdGenerator(inputFile.getParentFile.getName, inputFile.getName)
-        val logEntryParser = new SimpleLogEntryParser(idGenerator)
+        val parserContext = new SimpleFileParserContext(inputFile.getParentFile.getName, inputFile.getName)
+        val idGenerator = new SimpleLogIdGenerator
+        val logEntryParser = new SimpleLogEntryParser(parserContext, idGenerator)
         val dataSource = new SimpleFileLogDataSource(inputFile)
         val resultIterator = new LogParserIterator2(dataSource.lines, logEntryParser).flatten
 

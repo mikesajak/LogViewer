@@ -16,17 +16,18 @@ object NitriteLogStore {
     private val logEntryCollection = db.getCollection("logEntries")
 
     def mkDocument(logEntry: LogEntry): Document = {
-      new Document()
-        .put("directory", logEntry.directory)
-        .put("file", logEntry.file)
-        .put("timestamp", logEntry.timestamp)
-        .put("logLevel", logEntry.level)
-        .put("thread", logEntry.thread)
-        .put("sessionId", logEntry.sessionId)
-        .put("requestId", logEntry.requestId)
-        .put("userId", logEntry.userId)
-        .put("bodyIdx", logEntry.bodyIdx)
-        .put("rawMessage", logEntry.rawMessage)
+      Document.createDocument("a", "b")
+//      new Document()
+//        .put("directory", logEntry)
+//        .put("file", logEntry.file)
+//        .put("timestamp", logEntry.timestamp)
+//        .put("logLevel", logEntry.level)
+//        .put("thread", logEntry.thread)
+//        .put("sessionId", logEntry.sessionId)
+//        .put("requestId", logEntry.requestId)
+//        .put("userId", logEntry.userId)
+//        .put("bodyIdx", logEntry.bodyIdx)
+//        .put("rawMessage", logEntry.rawMessage)
     }
 
     class LogEntryMapper(var logEntry: LogEntry) extends Mappable {
@@ -35,12 +36,12 @@ object NitriteLogStore {
       }
 
       override def read(mapper: NitriteMapper, document: Document): Unit = {
-        val dir = document.get("directory").asInstanceOf[String]
-        val file = document.get("file").asInstanceOf[String]
-        val timestamp = document.get("timestamp").asInstanceOf[LocalDateTime]
+        val dir = document.get("directory", classOf[String])
+        val file = document.get("file", classOf[String])
+        val timestamp = document.get("timestamp", classOf[LocalDateTime])
+        val ord = document.get("ord", classOf[Int])
 
-        logEntry = new SimpleLogEntry(LogId(dir, file, timestamp),
-          timestamp,
+        logEntry = new SimpleLogEntry(LogId(FileLogSource(dir, file), timestamp, ord),
           document.get("logLevel", classOf[LogLevel]),
           document.get("thread", classOf[String]),
           document.get("sessionId", classOf[String]),

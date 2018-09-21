@@ -7,9 +7,10 @@ import java.util.function.Predicate
 import com.google.common.eventbus.Subscribe
 import com.typesafe.scalalogging.Logger
 import groovy.lang.GroovyShell
+import javafx.beans.value.{ChangeListener, ObservableValue}
 import javafx.collections.ObservableList
 import org.mikesajak.logviewer.log._
-import org.mikesajak.logviewer.ui.{FilteredObservableList, MappedObservableList}
+import org.mikesajak.logviewer.ui.{FilteredObservableList, MappedIndexedObservableList, MappedObservableList}
 import org.mikesajak.logviewer.util.Measure.measure
 import org.mikesajak.logviewer.util.{EventBus, ResourceManager}
 import scalafx.Includes._
@@ -20,7 +21,7 @@ import scalafx.event.ActionEvent
 import scalafx.scene.CacheHint
 import scalafx.scene.control._
 import scalafx.scene.image.{Image, ImageView}
-import scalafx.scene.input.{MouseButton, MouseEvent}
+import scalafx.scene.input.{KeyEvent, MouseButton, MouseEvent}
 import scalafx.scene.layout.Priority
 import scalafxml.core.macros.sfxml
 
@@ -36,9 +37,9 @@ case class LogRow(index: Int, logEntry: LogEntry, resourceMgr: ResourceManager) 
   import LogRow._
 
   val idx = new StringProperty(index.toString)
-  val timestamp = new StringProperty(dateTimeFormatter.format(logEntry.timestamp))
-  val directory = new StringProperty(logEntry.directory)
-  val file = new StringProperty(logEntry.file)
+  val timestamp = new StringProperty(dateTimeFormatter.format(logEntry.id.timestamp))
+  val directory = new StringProperty(logEntry.id.source.asInstanceOf[FileLogSource].directory) // FIXME: temporary cast, fix
+  val file = new StringProperty(logEntry.id.source.asInstanceOf[FileLogSource].file) // FIXME: temporary cast, fix
   val level = new StringProperty(logEntry.level.toString)
   val thread = new StringProperty(logEntry.thread)
   val session = new StringProperty(logEntry.sessionId)
@@ -166,21 +167,32 @@ class LogTableController(logTableView: TableView[LogRow],
       _.value.body
     }
 
-    logTableView.rowFactory = { tableView =>
-      val row = new TableRow[LogRow]()
+//    logTableView.rowFactory = { tableView =>
+//      val row = new TableRow[LogRow]()
 
-      row.handleEvent(MouseEvent.MouseClicked) { event: MouseEvent =>
-        if (!row.isEmpty) {
-          event.button match {
-            case MouseButton.Primary => selEntryTextArea.text = row.item.value.logEntry.rawMessage
-            case MouseButton.Secondary =>
-            case MouseButton.Middle =>
-            case _ =>
-          }
-        }
-      }
-      row
-    }
+//      row.handleEvent(MouseEvent.MouseClicked) { event: MouseEvent =>
+//        if (!row.isEmpty) {
+//          event.button match {
+//            case MouseButton.Primary =>
+////              val entry = row.item.value.logEntry
+////              selEntryTextArea.text = s"<id=${entry.id}> <level=${entry.level}> <thread=${entry.thread}> " +
+////                s"<sessionId=${entry.sessionId}> <requestId=${entry.requestId}> <userId=${entry.userId}>" +
+////                s"\n\n${entry.rawMessage}"
+//            case MouseButton.Secondary =>
+//            case MouseButton.Middle =>
+//            case _ =>
+//          }
+//        }
+//      }
+//      row
+//    }
+
+    logTableView.selectionModel.value.selectedItemProperty().addListener((obs, oldSelRow, newSelRow) => {
+      val entry = newSelRow.logEntry
+      selEntryTextArea.text = s"<id=${entry.id}> <level=${entry.level}> <thread=${entry.thread}> " +
+        s"<sessionId=${entry.sessionId}> <requestId=${entry.requestId}> <userId=${entry.userId}>" +
+        s"\n\n${entry.rawMessage}"
+    })
 
     splitPane.vgrow = Priority.Always
 
@@ -189,6 +201,23 @@ class LogTableController(logTableView: TableView[LogRow],
     searchCombo.onAction = (ae: ActionEvent) => logger.info(s"Search combo ENTER, text=${searchCombo.editor.text.get()}")
 
     val knownWords = Seq("id", "directory", "file", "level", "thread", "sessionId", "requestId", "userId", "body", "rawMessage")
+
+    filterCombo.editor.value.textProperty().addListener(new ChangeListener[String]() {
+      override def changed(observable: ObservableValue[_ <: String], oldValue: String, newValue: String): Unit = {
+//        val text = filterCombo.editor.text.get()
+        val text = newValue
+        val cursorIdx = filterCombo.editor.value.getCaretPosition
+        println(s"Key typed: $text, cursor=$cursorIdx")
+        val prevDotIdx = text.lastIndexOf('.', cursorIdx)
+        if (prevDotIdx < cursorIdx) {
+          val lastSegment = text.substring(prevDotIdx, cursorIdx)
+          if (lastSegment.length > 1) {
+            knownWords.find(str => str.startsWith(lastSegment))
+            .foreach(matchingWord => println(s"TODO: Show hint: ($lastSegment)${matchingWord.substring(lastSegment.length)}"))
+          }
+        }
+      }
+    })
 
 //    filterCombo.editor.value.handleEvent(KeyEvent.KeyTyped) { event: KeyEvent =>
 //      val text = filterCombo.editor.text.get()
@@ -268,8 +297,8 @@ class LogTableController(logTableView: TableView[LogRow],
 
   private def testPredicate(pred: FilterPredicate) = {
     val time = LocalDateTime.now()
-    val logEntry = new SimpleLogEntry(LogId("testDir", "testFile", time),
-      time, LogLevel.Info, "thread-1", "session-1234","reqest-1234", "testuser",
+    val logEntry = new SimpleLogEntry(LogId(FileLogSource("testDir", "testFile"), time, 0),
+      LogLevel.Info, "thread-1", "session-1234","reqest-1234", "testuser",
       "Message 12341234123412341234123412341342", 0)
     val logRow = new LogRow(0, logEntry, resourceMgr)
 
@@ -350,7 +379,7 @@ class LogTableController(logTableView: TableView[LogRow],
 
   private def initLogRows(logStore: LogStore, predicate: Option[FilterPredicate]): Unit = {
     this.logStore = logStore
-    tableRows = new MappedObservableList[LogRow, LogEntry](logStore, entry => new LogRow(0, entry, resourceMgr))
+    tableRows = new MappedIndexedObservableList[LogRow, LogEntry](logStore, (index, entry) => new LogRow(index, entry, resourceMgr))
     setFilterPredicate(predicate)
   }
 
@@ -368,8 +397,8 @@ class LogTableController(logTableView: TableView[LogRow],
     val statusMessage =
       if (logStore.isEmpty) s"${logStore.size} log entries."
       else {
-        val firstTimestamp = logStore.first.timestamp
-        val lastTimestamp = logStore.last.timestamp
+        val firstTimestamp = logStore.first.id.timestamp
+        val lastTimestamp = logStore.last.id.timestamp
         s"${logStore.size} log total entries, ${logTableView.items.value.size} filtered log entries, time range: ${LogRow.dateTimeFormatter.format(firstTimestamp)} - ${LogRow.dateTimeFormatter.format(lastTimestamp)}"
       }
 

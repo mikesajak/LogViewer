@@ -3,9 +3,11 @@ import java.time.LocalDateTime
 
 import com.typesafe.scalalogging.Logger
 import javafx.collections.ObservableListBase
+import org.mikesajak.logviewer.log.parser.{IdGenerator, ParserContext}
 import org.mikesajak.logviewer.util.SearchingEx
 
 import scala.collection.Searching.{Found, InsertionPoint}
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.math.Ordering
 
@@ -20,17 +22,35 @@ class ImmutableMemoryLogStore(entryStore: IndexedSeq[LogEntry]) extends Observab
 
   override def nonEmpty: Boolean = entries.nonEmpty
 
+  override def first: LogEntry = entryStore.head
+
+  override def last: LogEntry = entryStore.last
+
   implicit object DateTimeOrdering extends Ordering[LocalDateTime] {
     override def compare(x: LocalDateTime, y: LocalDateTime): Int = x.compareTo(y)
   }
 
-  override def range(start: LocalDateTime, end: LocalDateTime): LogStore = {
-    val startIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.timestamp, start) match {
+  override def range(start: LocalDateTime, end: LocalDateTime): IndexedSeq[LogEntry] = {
+    val startIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, start) match {
       case Found(foundIndex) => foundIndex
       case InsertionPoint(insertionPoint) => insertionPoint
     }
 
-    val endIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.timestamp, end) match {
+    val endIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, end) match {
+      case Found(foundIndex) => foundIndex
+      case InsertionPoint(insertionPoint) => insertionPoint
+    }
+
+    entryStore.slice(startIdx, endIdx)
+  }
+
+  override def logStoreForRange(start: LocalDateTime, end: LocalDateTime): LogStore = {
+    val startIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, start) match {
+      case Found(foundIndex) => foundIndex
+      case InsertionPoint(insertionPoint) => insertionPoint
+    }
+
+    val endIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, end) match {
       case Found(foundIndex) => foundIndex
       case InsertionPoint(insertionPoint) => insertionPoint
     }
@@ -64,8 +84,7 @@ object ImmutableMemoryLogStore {
     }
 
     def build(): ImmutableMemoryLogStore = {
-      new ImmutableMemoryLogStore(entries.sortWith((e1, e2) => e1.timestamp.isBefore(e2.timestamp)))
+      new ImmutableMemoryLogStore(entries.sorted)
     }
-
   }
 }
