@@ -16,9 +16,7 @@ class EventBus {
   }
 
   def publish[A](event: A): Unit = {
-    logScope(s"Publishing event: $event") { () =>
-      eventBus.post(event)
-    }
+    eventBus.post(event)
   }
 
   def register(subscriber: AnyRef): Unit = eventBus.register(subscriber)

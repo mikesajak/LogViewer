@@ -1,6 +1,7 @@
 package org.mikesajak.logviewer.log
 
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 
 import com.google.common.base.Stopwatch
 import com.google.common.eventbus.Subscribe
@@ -8,7 +9,7 @@ import com.typesafe.scalalogging.Logger
 import org.mikesajak.logviewer.log.parser._
 import org.mikesajak.logviewer.util.EventBus
 import org.mikesajak.logviewer.util.Measure.measure
-import org.mikesajak.logviewer.{AppendLogRequest, OpenLogRequest}
+import org.mikesajak.logviewer.{AppendLogRequest, OpenLogRequest, log}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
@@ -21,19 +22,23 @@ class LogParserMgr(eventBus: EventBus, globalState: GlobalState) {
 
   import scala.concurrent.ExecutionContext.Implicits.global
 
-  private val BATCH_SIZE = 100000
+  private val BATCH_SIZE = 100
   private val logFilePattern = "aircrews.*\\.log".r // TODO: allow user to type filter
 
   @Subscribe
   def handleOpenLog(request: OpenLogRequest): Unit = {
     Future {
-      val logStoreBuilder = new ImmutableMemoryLogStore.Builder()
+      val logStoreBuilder =
+        new ImmutableMemoryLogStore.Builder()
+//        new log.NitriteLogStore.MappedBuilder("test.db")
 
-      parseLogs(request.files, logStoreBuilder)
+      parseLogs(request.files, logStoreBuilder, logStoreBuilder.threadSafe)
 
       val logStore = measure("Sorting entries and building log store") { () =>
         logStoreBuilder.build()
       }
+
+      logger.info(s"Created new log store with ${logStore.size} entries.")
 
       globalState.currentLogStore = logStore
       eventBus.publish(SetNewLogEntries(logStore))
@@ -52,7 +57,7 @@ class LogParserMgr(eventBus: EventBus, globalState: GlobalState) {
 //      logStoreBuilder.add(globalState.currentLogStore.iterator)
 //      globalState.currentLogStore = ImmutableMemoryLogStore.empty
 
-      parseLogs(request.files, logStoreBuilder)
+      parseLogs(request.files, logStoreBuilder, logStoreBuilder.threadSafe)
 
       val logStore = measure("Sorting entries and building log store") { () =>
         logStoreBuilder.build()
@@ -63,16 +68,20 @@ class LogParserMgr(eventBus: EventBus, globalState: GlobalState) {
     }
   }
 
-  private def parseLogs(inputPaths: Seq[File], logStoreBuilder: ImmutableMemoryLogStore.Builder): Unit = {
+  private def parseLogs(inputPaths: Seq[File], logStoreBuilder: LogStoreBuilder, multithreaded: Boolean): Unit = {
     val filesToParse = inputPaths.view
-      .flatMap(f => traverseDir(f, logFilePattern))
+                         .flatMap(f => traverseDir(f, logFilePattern))
+                         .toList
 
     // TODO: smarter log source definition - use list of input directories, and map directly to source dir->file
 
     logger.debug(s"Found ${filesToParse.length} files to parse: $filesToParse")
 
+    val completedCount = new AtomicInteger()
+
     measure(s"Parsing ${filesToParse.size} log files from ${inputPaths.map(_.getName)}") { () =>
-      for ((inputFile, idx) <- filesToParse.zipWithIndex) {
+      val inputData = if (multithreaded) filesToParse.par else filesToParse
+      inputData.foreach { inputFile =>
         val stopwatch = Stopwatch.createStarted()
 
         val parserContext = new SimpleFileParserContext(inputFile.getParentFile.getName, inputFile.getName)
@@ -80,11 +89,14 @@ class LogParserMgr(eventBus: EventBus, globalState: GlobalState) {
         val logEntryParser = new SimpleLogEntryParser(parserContext, idGenerator)
         val dataSource = new SimpleFileLogDataSource(inputFile)
         val resultIterator = new LogParserIterator2(dataSource.lines, logEntryParser).flatten
+            .grouped(BATCH_SIZE)
 
-        logStoreBuilder.add(resultIterator.toSeq)
+        resultIterator.foreach(batch => logStoreBuilder.add(batch))
 
-        eventBus.publish(ParseProgress(idx.toFloat / filesToParse.length,
-          s"Parsing $idx/${filesToParse.length} log from ${inputFile.getName} finished in $stopwatch. Current logStore size is ${logStoreBuilder.size}"))
+        val completed = completedCount.incrementAndGet()
+        eventBus.publish(ParseProgress(completed.toFloat / filesToParse.length,
+          s"Parsing $completed/${filesToParse.length} log from ${inputFile.getName} finished in $stopwatch. Current logStore size is ${logStoreBuilder.size}"))
+
       }
     }
   }

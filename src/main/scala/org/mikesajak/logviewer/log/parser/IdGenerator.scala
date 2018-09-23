@@ -10,8 +10,8 @@ trait ParserContext {
   def source: LogSource
 }
 
-class SimpleFileParserContext(override val source: FileLogSource) extends ParserContext {
-  def this(directory: String, file: String) = this(FileLogSource(directory, file))
+class SimpleFileParserContext(override val source: LogSource) extends ParserContext {
+  def this(directory: String, file: String) = this(LogSource(directory, file))
 }
 
 trait IdGenerator {

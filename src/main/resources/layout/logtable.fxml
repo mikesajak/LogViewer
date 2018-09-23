@@ -18,7 +18,7 @@
 <?import javafx.scene.layout.RowConstraints?>
 <?import javafx.scene.layout.VBox?>
 
-<SplitPane fx:id="splitPane" dividerPositions="0.6455331412103746" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" orientation="VERTICAL" xmlns="http://javafx.com/javafx/8.0.111" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.mikesajak.logviewer.ui.controller.LogTableController">
+<SplitPane fx:id="splitPane" dividerPositions="0.6455331412103746" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" orientation="VERTICAL" xmlns="http://javafx.com/javafx/8.0.141" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.mikesajak.logviewer.ui.controller.LogTableController">
    <items>
       <VBox maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" spacing="5.0">
          <children>
@@ -71,7 +71,7 @@
             <TableView fx:id="logTableView" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" tableMenuButtonVisible="true" VBox.vgrow="ALWAYS">
               <columns>
                   <TableColumn fx:id="idColumn" editable="false" prefWidth="44.0" sortable="false" text="Id" />
-                  <TableColumn fx:id="dirColumn" editable="false" prefWidth="75.0" sortable="false" text="Directory" />
+                  <TableColumn fx:id="sourceColumn" editable="false" prefWidth="75.0" sortable="false" text="Source" />
                 <TableColumn fx:id="fileColumn" editable="false" prefWidth="106.0" sortable="false" text="File" />
                 <TableColumn fx:id="timestampColumn" editable="false" prefWidth="90.0" sortable="false" text="Timestamp" />
                   <TableColumn fx:id="levelColumn" editable="false" prefWidth="60.0" sortable="false" text="Level" />

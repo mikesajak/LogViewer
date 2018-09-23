@@ -23,9 +23,15 @@ object Measure {
 
   def measure[A](name: String, logLevel: LoggingLevel = Debug)(f: () => A)(implicit logger: Logger): A = {
     val stopwatch = Stopwatch.createStarted()
-    val result = f()
-    stopwatch.stop()
-    Logging.log(s"$name finished in $stopwatch", logLevel)
-    result
+    try {
+      val result = f()
+      stopwatch.stop()
+      Logging.log(s"$name finished in $stopwatch", logLevel)
+      result
+    } catch {
+      case e: Exception =>
+        Logging.log(s"$name finished with exception in $stopwatch", e, LoggingLevel.Warning)
+        throw e
+    }
   }
 }

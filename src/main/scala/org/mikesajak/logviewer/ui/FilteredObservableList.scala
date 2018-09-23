@@ -4,15 +4,14 @@ import java.util
 
 import com.typesafe.scalalogging.Logger
 import javafx.collections.ListChangeListener.Change
-import javafx.collections.{ListChangeListener, ObservableList}
 import javafx.collections.transformation.TransformationList
-import org.mikesajak.logviewer.util.Measure
+import javafx.collections.{ListChangeListener, ObservableList}
 import org.mikesajak.logviewer.util.Measure.measure
 
 import scala.collection.JavaConverters._
 
 class FilteredObservableList[E](source: ObservableList[_ <: E], predicate: E => Boolean) extends TransformationList[E, E](source) {
-  private implicit val logger = Logger[FilteredObservableList[E]]
+  private implicit val logger: Logger = Logger[FilteredObservableList[E]]
 
   private val filterTable = measure("Preparing filter table") { () =>
     val indexes = source.iterator().asScala.zipWithIndex

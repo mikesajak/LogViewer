@@ -8,18 +8,9 @@ import javafx.collections.transformation.TransformationList
 import collection.JavaConverters._
 
 class MappedObservableList[E, F](source: ObservableList[_ <: F], val mapper: F => E) extends TransformationList[E, F](source) {
-
-  private val cache = new util.WeakHashMap[Int, E]()
-
   override def getSourceIndex(index: Int): Int = index
-  override def get(index: Int): E = {
-    var cachedValue = cache.get(index)
-    if (cachedValue == null) {
-      cachedValue = mapper(getSource.get(index))
-      cache.put(index, cachedValue)
-    }
-    cachedValue
-  }
+  override def get(index: Int): E = mapper(getSource.get(index))
+
   override def size(): Int = getSource.size()
 
   override def sourceChanged(c: ListChangeListener.Change[_ <: F]): Unit = {
@@ -55,20 +46,9 @@ class MappedObservableList[E, F](source: ObservableList[_ <: F], val mapper: F =
   }
 }
 
-
 class MappedIndexedObservableList[E, F](source: ObservableList[_ <: F], val mapper: (Int, F) => E) extends TransformationList[E, F](source) {
-
-  private val cache = new util.WeakHashMap[Int, E]()
-
   override def getSourceIndex(index: Int): Int = index
-  override def get(index: Int): E = {
-    var cachedValue = cache.get(index)
-    if (cachedValue == null) {
-      cachedValue = mapper(index, getSource.get(index))
-      cache.put(index, cachedValue)
-    }
-    cachedValue
-  }
+  override def get(index: Int): E = mapper(index, getSource.get(index))
   override def size(): Int = getSource.size()
 
   override def sourceChanged(c: ListChangeListener.Change[_ <: F]): Unit = {

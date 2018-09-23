@@ -30,33 +30,33 @@ class ImmutableMemoryLogStore(entryStore: IndexedSeq[LogEntry]) extends Observab
     override def compare(x: LocalDateTime, y: LocalDateTime): Int = x.compareTo(y)
   }
 
-  override def range(start: LocalDateTime, end: LocalDateTime): IndexedSeq[LogEntry] = {
-    val startIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, start) match {
-      case Found(foundIndex) => foundIndex
-      case InsertionPoint(insertionPoint) => insertionPoint
-    }
-
-    val endIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, end) match {
-      case Found(foundIndex) => foundIndex
-      case InsertionPoint(insertionPoint) => insertionPoint
-    }
-
-    entryStore.slice(startIdx, endIdx)
-  }
-
-  override def logStoreForRange(start: LocalDateTime, end: LocalDateTime): LogStore = {
-    val startIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, start) match {
-      case Found(foundIndex) => foundIndex
-      case InsertionPoint(insertionPoint) => insertionPoint
-    }
-
-    val endIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, end) match {
-      case Found(foundIndex) => foundIndex
-      case InsertionPoint(insertionPoint) => insertionPoint
-    }
-
-    new ImmutableMemoryLogStore(new IndexedSeqRangeWrapper(entryStore, startIdx, endIdx))
-  }
+//  override def range(start: LocalDateTime, end: LocalDateTime): IndexedSeq[LogEntry] = {
+//    val startIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, start) match {
+//      case Found(foundIndex) => foundIndex
+//      case InsertionPoint(insertionPoint) => insertionPoint
+//    }
+//
+//    val endIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, end) match {
+//      case Found(foundIndex) => foundIndex
+//      case InsertionPoint(insertionPoint) => insertionPoint
+//    }
+//
+//    entryStore.slice(startIdx, endIdx)
+//  }
+//
+//  override def logStoreForRange(start: LocalDateTime, end: LocalDateTime): LogStore = {
+//    val startIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, start) match {
+//      case Found(foundIndex) => foundIndex
+//      case InsertionPoint(insertionPoint) => insertionPoint
+//    }
+//
+//    val endIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, end) match {
+//      case Found(foundIndex) => foundIndex
+//      case InsertionPoint(insertionPoint) => insertionPoint
+//    }
+//
+//    new ImmutableMemoryLogStore(new IndexedSeqRangeWrapper(entryStore, startIdx, endIdx))
+//  }
 }
 
 class IndexedSeqRangeWrapper[A](internalSeq: IndexedSeq[A], startIdx: Int, endIdx: Int) extends IndexedSeq[A] {
@@ -69,22 +69,25 @@ class IndexedSeqRangeWrapper[A](internalSeq: IndexedSeq[A], startIdx: Int, endId
 object ImmutableMemoryLogStore {
   val empty = new ImmutableMemoryLogStore(IndexedSeq.empty)
 
-  class Builder {
+  class Builder extends LogStoreBuilder {
     private val logger = Logger[ImmutableMemoryLogStore.Builder]
-    private val entries = new ArrayBuffer[LogEntry](1000000)
+    private val entriesSet = new mutable.TreeSet[LogEntry]()
 
-    def size: Int = entries.size
+    override def threadSafe: Boolean = true
 
-    def add(entry: LogEntry): Unit = {
-      entries += entry
+    override def size: Long = synchronized { entriesSet.size }
+
+    override def add(entry: LogEntry): Unit = synchronized {
+      if (!entriesSet.contains(entry)) entriesSet += entry
+      else logger.debug(s"Store already contains entry with id=${entry.id}. Ignoring")
     }
 
-    def add(batch: Seq[LogEntry]): Unit = {
-      entries ++= batch
+    override def add(batch: Seq[LogEntry]): Unit = synchronized {
+      batch.foreach(add)
     }
 
-    def build(): ImmutableMemoryLogStore = {
-      new ImmutableMemoryLogStore(entries.sorted)
+    override def build(): LogStore = synchronized {
+      new ImmutableMemoryLogStore(entriesSet.toIndexedSeq)
     }
   }
 }

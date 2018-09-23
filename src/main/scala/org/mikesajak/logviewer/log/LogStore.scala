@@ -1,16 +1,24 @@
 package org.mikesajak.logviewer.log
 
-import java.time.LocalDateTime
-
 import javafx.collections.ObservableList
+
+trait LogStoreBuilder {
+  def size: Long
+  def add(logEntry: LogEntry): Unit
+  def add(logEntries: Seq[LogEntry]): Unit
+
+  def threadSafe: Boolean
+
+  def build(): LogStore
+}
 
 trait LogStore extends ObservableList[LogEntry] {
   def isEmpty: Boolean
-  def nonEmpty: Boolean
+  def nonEmpty: Boolean = !isEmpty
   def first: LogEntry
   def last: LogEntry
-  def range(start: LocalDateTime, end: LocalDateTime): IndexedSeq[LogEntry]
-  def logStoreForRange(start: LocalDateTime, end: LocalDateTime): LogStore
+//  def range(start: LocalDateTime, end: LocalDateTime): IndexedSeq[LogEntry]
+//  def logStoreForRange(start: LocalDateTime, end: LocalDateTime): LogStore
 }
 
 

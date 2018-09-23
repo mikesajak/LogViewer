@@ -2,7 +2,6 @@ package org.mikesajak.logviewer.ui.controller
 
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.function.Predicate
 
 import com.google.common.eventbus.Subscribe
 import com.typesafe.scalalogging.Logger
@@ -10,7 +9,7 @@ import groovy.lang.GroovyShell
 import javafx.beans.value.{ChangeListener, ObservableValue}
 import javafx.collections.ObservableList
 import org.mikesajak.logviewer.log._
-import org.mikesajak.logviewer.ui.{FilteredObservableList, MappedIndexedObservableList, MappedObservableList}
+import org.mikesajak.logviewer.ui.{CachedObservableList, FilteredObservableList, MappedIndexedObservableList}
 import org.mikesajak.logviewer.util.Measure.measure
 import org.mikesajak.logviewer.util.{EventBus, ResourceManager}
 import scalafx.Includes._
@@ -21,7 +20,7 @@ import scalafx.event.ActionEvent
 import scalafx.scene.CacheHint
 import scalafx.scene.control._
 import scalafx.scene.image.{Image, ImageView}
-import scalafx.scene.input.{KeyEvent, MouseButton, MouseEvent}
+import scalafx.scene.input.MouseEvent
 import scalafx.scene.layout.Priority
 import scalafxml.core.macros.sfxml
 
@@ -38,34 +37,20 @@ case class LogRow(index: Int, logEntry: LogEntry, resourceMgr: ResourceManager) 
 
   val idx = new StringProperty(index.toString)
   val timestamp = new StringProperty(dateTimeFormatter.format(logEntry.id.timestamp))
-  val directory = new StringProperty(logEntry.id.source.asInstanceOf[FileLogSource].directory) // FIXME: temporary cast, fix
-  val file = new StringProperty(logEntry.id.source.asInstanceOf[FileLogSource].file) // FIXME: temporary cast, fix
+  val source = new StringProperty(logEntry.id.source.name)
+  val file = new StringProperty(logEntry.id.source.file)
   val level = new StringProperty(logEntry.level.toString)
   val thread = new StringProperty(logEntry.thread)
   val session = new StringProperty(logEntry.sessionId)
   val requestId = new StringProperty(logEntry.requestId)
   val userId = new StringProperty(logEntry.userId)
   val body = new StringProperty(whiteSpacePattern.replaceAllIn(logEntry.body, "\\\\n"))
-
-//  def canEqual(other: Any): Boolean = other.isInstanceOf[LogRow]
-//
-//  override def equals(other: Any): Boolean = other match {
-//    case that: LogRow =>
-//      (that canEqual this) &&
-//        logEntry.id == that.logEntry.id
-//    case _ => false
-//  }
-//
-//  override def hashCode(): Int = {
-//    val state = Seq(logEntry.id)
-//    state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
-//  }
 }
 
 @sfxml
 class LogTableController(logTableView: TableView[LogRow],
                          idColumn: TableColumn[LogRow, String],
-                         dirColumn: TableColumn[LogRow, String],
+                         sourceColumn: TableColumn[LogRow, String],
                          fileColumn: TableColumn[LogRow, String],
                          timestampColumn: TableColumn[LogRow, String],
                          levelColumn: TableColumn[LogRow, LogLevel],
@@ -122,8 +107,8 @@ class LogTableController(logTableView: TableView[LogRow],
     idColumn.cellValueFactory = {
       _.value.idx
     }
-    dirColumn.cellValueFactory = {
-      _.value.directory
+    sourceColumn.cellValueFactory = {
+      _.value.source
     }
     fileColumn.cellValueFactory = {
       _.value.file
@@ -297,7 +282,7 @@ class LogTableController(logTableView: TableView[LogRow],
 
   private def testPredicate(pred: FilterPredicate) = {
     val time = LocalDateTime.now()
-    val logEntry = new SimpleLogEntry(LogId(FileLogSource("testDir", "testFile"), time, 0),
+    val logEntry = new SimpleLogEntry(LogId(LogSource("testDir", "testFile"), time, 0),
       LogLevel.Info, "thread-1", "session-1234","reqest-1234", "testuser",
       "Message 12341234123412341234123412341342", 0)
     val logRow = new LogRow(0, logEntry, resourceMgr)
@@ -379,7 +364,9 @@ class LogTableController(logTableView: TableView[LogRow],
 
   private def initLogRows(logStore: LogStore, predicate: Option[FilterPredicate]): Unit = {
     this.logStore = logStore
-    tableRows = new MappedIndexedObservableList[LogRow, LogEntry](logStore, (index, entry) => new LogRow(index, entry, resourceMgr))
+    val logRowList = new MappedIndexedObservableList[LogRow, LogEntry](logStore,
+      (index, entry) => new LogRow(index, entry, resourceMgr))
+    tableRows = new CachedObservableList(logRowList)
     setFilterPredicate(predicate)
   }
 
