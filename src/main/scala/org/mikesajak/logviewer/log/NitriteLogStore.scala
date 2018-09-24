@@ -366,6 +366,8 @@ class NitriteCollLogStore(dbFileName: String) extends NitriteLogStoreBase(dbFile
 
 
   override def size(): Int = logEntryColl.size().toInt
+
+  override def indexes: Indexes = ImmutableIndexes.empty // tmp mock
 }
 
 //class BufferedNitriteCollLogStore(logStore: LogStore, bufferSize: Int = 100) extends ObservableListBase[LogEntry] with LogStore {
@@ -408,6 +410,8 @@ class NitriteRepoLogStore(dbFileName: String) extends NitriteLogStoreBase(dbFile
     else null
   }
   override def size(): Int = logEntryRepo.size().toInt
+
+  override def indexes: Indexes = ImmutableIndexes.empty // tmp mock
 }
 
 class NitriteWrappedLogStore(dbFileName: String) extends NitriteLogStoreBase(dbFileName) {
@@ -421,4 +425,6 @@ class NitriteWrappedLogStore(dbFileName: String) extends NitriteLogStoreBase(dbF
     else null
   }
   override def size(): Int = logEntryRepo.size().toInt
+
+  override def indexes: Indexes = ImmutableIndexes.empty // tmp mock
 }

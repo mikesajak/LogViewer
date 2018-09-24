@@ -12,6 +12,13 @@ trait LogStoreBuilder {
   def build(): LogStore
 }
 
+trait Indexes {
+  def sources: Set[String]
+  def threads: Set[String]
+  def sessions: Set[String]
+  def users: Set[String]
+}
+
 trait LogStore extends ObservableList[LogEntry] {
   def isEmpty: Boolean
   def nonEmpty: Boolean = !isEmpty
@@ -19,6 +26,8 @@ trait LogStore extends ObservableList[LogEntry] {
   def last: LogEntry
 //  def range(start: LocalDateTime, end: LocalDateTime): IndexedSeq[LogEntry]
 //  def logStoreForRange(start: LocalDateTime, end: LocalDateTime): LogStore
+
+  def indexes: Indexes
 }
 
 

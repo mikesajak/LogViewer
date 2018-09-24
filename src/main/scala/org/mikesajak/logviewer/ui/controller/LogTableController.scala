@@ -8,8 +8,10 @@ import com.typesafe.scalalogging.Logger
 import groovy.lang.GroovyShell
 import javafx.beans.value.{ChangeListener, ObservableValue}
 import javafx.collections.ObservableList
+import javafx.geometry.Insets
+import org.controlsfx.control.{BreadCrumbBar, PopOver, SegmentedButton}
 import org.mikesajak.logviewer.log._
-import org.mikesajak.logviewer.ui.{CachedObservableList, FilteredObservableList, MappedIndexedObservableList}
+import org.mikesajak.logviewer.ui.{CachedObservableList, ColorGen, FilteredObservableList, MappedIndexedObservableList}
 import org.mikesajak.logviewer.util.Measure.measure
 import org.mikesajak.logviewer.util.{EventBus, ResourceManager}
 import scalafx.Includes._
@@ -21,9 +23,10 @@ import scalafx.scene.CacheHint
 import scalafx.scene.control._
 import scalafx.scene.image.{Image, ImageView}
 import scalafx.scene.input.MouseEvent
-import scalafx.scene.layout.Priority
+import scalafx.scene.layout.{Priority, VBox}
 import scalafxml.core.macros.sfxml
 
+import scala.collection.JavaConverters._
 import scala.util.matching.Regex
 
 object LogRow {
@@ -59,10 +62,16 @@ class LogTableController(logTableView: TableView[LogRow],
                          requestColumn: TableColumn[LogRow, String],
                          userColumn: TableColumn[LogRow, String],
                          bodyColumn: TableColumn[LogRow, String],
+
+                         selEntryVBox: VBox,
                          selEntryTextArea: TextArea,
 
                          searchCombo: ComboBox[String], clearSearchButton: Button,
                          filterCombo: ComboBox[String], clearFilterButton: Button,
+                         filtersTreeView: TreeView[String],
+                         addFilterButton: Button,
+                         replaceFilterButton: Button,
+                         addLogLevelFilterButton: Button,
 
                          errorLevelToggle: ToggleButton, warnLevelToggle: ToggleButton, infoLevelToggle: ToggleButton,
                          debugLevelToggle: ToggleButton, traceLevelToggle: ToggleButton, otherLevelToggle: ToggleButton,
@@ -100,6 +109,10 @@ class LogTableController(logTableView: TableView[LogRow],
 
   init()
 
+  private var sourceColors = Map[String, String]()
+  private var threadColors = Map[String, String]()
+  private var sessionColors = Map[String, String]()
+  private var userColors = Map[String, String]()
 
   def init() {
     logTableView.selectionModel.value.selectionMode = SelectionMode.Multiple
@@ -109,6 +122,14 @@ class LogTableController(logTableView: TableView[LogRow],
     }
     sourceColumn.cellValueFactory = {
       _.value.source
+    }
+    sourceColumn.cellFactory = { tc: TableColumn[LogRow, String] =>
+      new TableCell[LogRow, String]() {
+        item.onChange { (_,_, newValue) =>
+          text = newValue
+          style = s"-fx-background-color: #${sourceColors.getOrElse(newValue, "ffffff")};"
+        }
+      }
     }
     fileColumn.cellValueFactory = {
       _.value.file
@@ -139,14 +160,38 @@ class LogTableController(logTableView: TableView[LogRow],
     threadColumn.cellValueFactory = {
       _.value.thread
     }
+    threadColumn.cellFactory = { tc: TableColumn[LogRow, String] =>
+      new TableCell[LogRow, String]() {
+        item.onChange { (_, _, newValue) =>
+          text = newValue
+          style = s"-fx-background-color: #${threadColors.getOrElse(newValue, "ffffff")};"
+        }
+      }
+    }
     sessionColumn.cellValueFactory = {
       _.value.session
+    }
+    sessionColumn.cellFactory = { tc: TableColumn[LogRow, String] =>
+      new TableCell[LogRow, String]() {
+        item.onChange { (_, _, newValue) =>
+          text = newValue
+          style = s"-fx-background-color: #${sessionColors.getOrElse(newValue, "ffffff")};"
+        }
+      }
     }
     requestColumn.cellValueFactory = {
       _.value.requestId
     }
     userColumn.cellValueFactory = {
       _.value.userId
+    }
+    userColumn.cellFactory = { tc: TableColumn[LogRow, String] =>
+      new TableCell[LogRow, String]() {
+        item.onChange { (_, _, newValue) =>
+          text = newValue
+          style = s"-fx-background-color: #${userColors.getOrElse(newValue, "ffffff")};"
+        }
+      }
     }
     bodyColumn.cellValueFactory = {
       _.value.body
@@ -174,6 +219,15 @@ class LogTableController(logTableView: TableView[LogRow],
 
     logTableView.selectionModel.value.selectedItemProperty().addListener((obs, oldSelRow, newSelRow) => {
       val entry = newSelRow.logEntry
+      val breadCrumbBar = new BreadCrumbBar[String]()
+      val model = BreadCrumbBar.buildTreeModel(newSelRow.index.toString,
+                                               entry.id.source.name, entry.id.source.file,
+                                               entry.id.timestamp.toString, entry.level.toString, entry.thread,
+                                               entry.sessionId, entry.requestId, entry.userId, "")
+      breadCrumbBar.setSelectedCrumb(model.getParent)
+      breadCrumbBar.setAutoNavigationEnabled(false)
+      selEntryVBox.children.setAll(Seq(breadCrumbBar, selEntryTextArea.delegate).asJava)
+
       selEntryTextArea.text = s"<id=${entry.id}> <level=${entry.level}> <thread=${entry.thread}> " +
         s"<sessionId=${entry.sessionId}> <requestId=${entry.requestId}> <userId=${entry.userId}>" +
         s"\n\n${entry.rawMessage}"
@@ -183,7 +237,36 @@ class LogTableController(logTableView: TableView[LogRow],
 
     initLogRows(ImmutableMemoryLogStore.empty, None)
 
-    searchCombo.onAction = (ae: ActionEvent) => logger.info(s"Search combo ENTER, text=${searchCombo.editor.text.get()}")
+    filtersTreeView.root = new TreeItem("")
+    addLogLevelFilterButton.onAction = { ae =>
+      val popOver = new PopOver()
+      val levelToggles = LogLevel.values.map(l => new javafx.scene.control.ToggleButton(l.toString))
+      val levelsSegButton = new SegmentedButton(levelToggles: _*)
+      levelsSegButton.setToggleGroup(null) // allow multi selection
+
+      val setButton = new Button {
+        text = "Set"
+        onAction = {
+          println("TODO: Set log level filter")
+          ae => popOver.hide()
+        }
+      }
+
+
+      val hbox = new javafx.scene.layout.HBox(5, levelsSegButton, setButton)
+      hbox.margin = new Insets(10)
+
+      popOver.setContentNode(hbox)
+      popOver.setArrowLocation(PopOver.ArrowLocation.TOP_RIGHT)
+      popOver.setDetachable(false)
+      popOver.show(addLogLevelFilterButton.delegate)
+    }
+
+    searchCombo.onAction = (ae: ActionEvent) => {
+      val queryText = searchCombo.value.value
+      logger.info(s"Search combo ENTER, text=${queryText}")
+      filtersTreeView.root.value.children.add(new TreeItem(queryText))
+    }
 
     val knownWords = Seq("id", "directory", "file", "level", "thread", "sessionId", "requestId", "userId", "body", "rawMessage")
 
@@ -364,6 +447,9 @@ class LogTableController(logTableView: TableView[LogRow],
 
   private def initLogRows(logStore: LogStore, predicate: Option[FilterPredicate]): Unit = {
     this.logStore = logStore
+
+    initColorMaps()
+
     val logRowList = new MappedIndexedObservableList[LogRow, LogEntry](logStore,
       (index, entry) => new LogRow(index, entry, resourceMgr))
     tableRows = new CachedObservableList(logRowList)
@@ -392,6 +478,22 @@ class LogTableController(logTableView: TableView[LogRow],
     Platform.runLater {
       statusLabel.text = statusMessage
     }
+  }
+
+  private def initColorMaps(): Unit = {
+    val colorGen = new ColorGen
+
+    def initMap(values: Set[String], reservePool: Int) = {
+      val result = values.map(s => s -> colorGen.nextColor() ).toMap
+      for (i <- values.size until reservePool)
+        colorGen.nextColor()
+      result
+    }
+
+    sourceColors = initMap(logStore.indexes.sources, 100)
+    threadColors = initMap(logStore.indexes.threads, 200)
+    sessionColors = initMap(logStore.indexes.sessions, 200)
+    userColors = initMap(logStore.indexes.users, 200)
   }
 
 }
