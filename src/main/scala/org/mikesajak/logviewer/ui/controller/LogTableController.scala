@@ -28,6 +28,7 @@ import scalafxml.core.macros.sfxml
 
 import scala.collection.JavaConverters._
 import scala.util.matching.Regex
+import scala.util.{Failure, Success, Try}
 
 object LogRow {
   val whiteSpacePattern: Regex = """\r\n|\n|\r""".r
@@ -272,39 +273,33 @@ class LogTableController(logTableView: TableView[LogRow],
 
     filterCombo.editor.value.textProperty().addListener(new ChangeListener[String]() {
       override def changed(observable: ObservableValue[_ <: String], oldValue: String, newValue: String): Unit = {
-//        val text = filterCombo.editor.text.get()
         val text = newValue
-        val cursorIdx = filterCombo.editor.value.getCaretPosition
-        println(s"Key typed: $text, cursor=$cursorIdx")
-        val prevDotIdx = text.lastIndexOf('.', cursorIdx)
-        if (prevDotIdx < cursorIdx) {
-          val lastSegment = text.substring(prevDotIdx, cursorIdx)
-          if (lastSegment.length > 1) {
-            knownWords.find(str => str.startsWith(lastSegment))
-            .foreach(matchingWord => println(s"TODO: Show hint: ($lastSegment)${matchingWord.substring(lastSegment.length)}"))
+        // calculate caret pos by hand, because in this listener carent is always 1 char behind...
+        val diffIdx = oldValue.zip(newValue).indexWhere(e => e._1 != e._2)
+        val cursorIdx = if (diffIdx < 0) text.length else diffIdx
+        val lastSegmentIdx = text.lastIndexOf("entry.", cursorIdx)
+        if (lastSegmentIdx >= 0) {
+          val segStart = math.min(lastSegmentIdx+ 6, text.length)
+          val segEnd = math.max(segStart, cursorIdx)
+          val lastSegment = text.substring(segStart, segEnd)
+          if (lastSegment.length > 0) {
+            val nextSpaceIdx = text.indexWhere(ch => !Character.isLetterOrDigit(ch), segStart)
+            val nextSegmentIdx = if (nextSpaceIdx < 0) text.length else nextSpaceIdx
+            val hints = knownWords.find(str => str.startsWith(lastSegment))
+              .map(matchingWord => (lastSegment, matchingWord.substring(lastSegment.length), text.substring(segStart, nextSegmentIdx)))
+
+            hints.map(h => s"${h._1}(${h._2})[${h._3}]")
+                 .reduceLeftOption((a,b) => a + ", " + b)
+                 .foreach(ht => println(s"Filter hints: $ht"))
           }
         }
       }
     })
 
-//    filterCombo.editor.value.handleEvent(KeyEvent.KeyTyped) { event: KeyEvent =>
-//      val text = filterCombo.editor.text.get()
-//      val cursorIdx = filterCombo.editor.value.getCaretPosition
-//      println(s"Key typed: $text, cursor=$cursorIdx")
-//      val prevDotIdx = text.lastIndexOf('.', cursorIdx)
-//      if (prevDotIdx < cursorIdx) {
-//        val lastSegment = text.substring(prevDotIdx, cursorIdx)
-//        if (lastSegment.length > 1) {
-//          knownWords.find(str => str.startsWith(lastSegment))
-//            .foreach(matchingWord => println(s"TODO: Show hint: ($lastSegment)${matchingWord.substring(lastSegment.length)}"))
-//        }
-//      }
-//    }
-
     filterCombo.onAction = (ae: ActionEvent) => {
-      val filterText = filterCombo.editor.text.get()
+      val filterText = filterCombo.value.value//filterCombo.editor.text.get()
       logger.debug(s"Filter combo action, text=$filterText")
-      setFilterPredicate(buildPredicate())
+      updateFilterPredicate()
     }
 
     val filterValidationTooltip = new Tooltip()
@@ -320,43 +315,74 @@ class LogTableController(logTableView: TableView[LogRow],
 
 
     logLevelToggles.foreach { button =>
-      button.onAction = (ae: ActionEvent) => setFilterPredicate(buildPredicate())
+      button.onAction = (ae: ActionEvent) => updateFilterPredicate()
     }
 
     eventBus.register(this)
   }
 
-  private def buildPredicate(): Option[FilterPredicate] = {
+  private def updateFilterPredicate(): Unit = {
+    buildPredicate() match {
+      case Success(predOpt) =>
+        filterCombo.editor.value.styleClass -= "error"
+        filterValidationError = None
+        setFilterPredicate(predOpt)
+
+      case Failure(exception) =>
+        logger.warn(s"Filter predicate is not valid.", exception)
+        filterCombo.editor.value.styleClass += "error"
+        filterValidationError = Some(exceptionMessage(exception))
+    }
+  }
+
+  private def buildPredicate(): Try[Option[FilterPredicate]] = {
     val toggleButtonPredicate =
       if (logLevelToggles.forall(!_.isSelected)) None
       else logLevelPred(logLevelToggles2)
 
     val filterExpression = filterCombo.editor.text.get
-    val expressionPredicate = buildFilterExprPredicate(filterExpression)
+    val expressionPredicate = buildFilterExprPredicate2(filterExpression)
 
-    val predicate = Seq(toggleButtonPredicate, expressionPredicate)
-                      .flatten
-                      .reduceLeftOption((resultPred, curPred) => (logRow: LogRow) => resultPred(logRow) && curPred(logRow))
-    predicate
+    expressionPredicate.map { exprPred =>
+      Seq(toggleButtonPredicate, exprPred)
+        .flatten
+        .reduceLeftOption((resultPred, curPred) => (logRow: LogRow) => resultPred(logRow) && curPred(logRow))
+    }
   }
 
-  private def buildFilterExprPredicate(filterExpression: String): Option[FilterPredicate] = {
+  private def buildFilterExprPredicate2(filterExpression: String): Try[Option[FilterPredicate]] = {
     if (filterExpression.nonEmpty) {
-      val expressionPredicateTest = parseFilter(filterExpression, suppressExceptions = false)
-      // test predicate on some basic data
-      testPredicate(expressionPredicateTest) match {
-        case Some(exception) =>
-          logger.warn(s"Filter predicate is not valid.", exception)
-          filterCombo.editor.value.styleClass += "error"
-          filterValidationError = Some(exceptionMessage(exception))
-          None
-        case None =>
-          filterCombo.editor.value.styleClass -= "error"
-          filterValidationError = None
-          Some(parseFilter(filterExpression, suppressExceptions = true))
-      }
-    } else None
+      Try {
+        val expressionPredicateTest = parseFilter(filterExpression, suppressExceptions = false)
+        // test predicate on some basic data
+        testPredicate(expressionPredicateTest)
+
+        parseFilter(filterExpression, suppressExceptions = true)
+      }.map(Some(_))
+    } else Success(None)
   }
+
+//  private def buildFilterExprPredicate(filterExpression: String): Option[FilterPredicate] = {
+//    if (filterExpression.nonEmpty) {
+//      val expressionPredicateTest = parseFilter(filterExpression, suppressExceptions = false)
+//      // test predicate on some basic data
+//      testPredicate(expressionPredicateTest) match {
+//        case Some(exception) =>
+//          logger.warn(s"Filter predicate is not valid.", exception)
+//          filterCombo.editor.value.styleClass += "error"
+//          filterValidationError = Some(exceptionMessage(exception))
+//          None
+//        case None =>
+//          filterCombo.editor.value.styleClass -= "error"
+//          filterValidationError = None
+//          Some(parseFilter(filterExpression, suppressExceptions = true))
+//      }
+//    } else {
+//      filterCombo.editor.value.styleClass -= "error"
+//      filterValidationError = None
+//      None
+//    }
+//  }
 
   private def exceptionMessage(ex: Throwable): String = {
     if (ex.getCause == null || ex.getCause == ex) ex.getLocalizedMessage
@@ -370,12 +396,7 @@ class LogTableController(logTableView: TableView[LogRow],
       "Message 12341234123412341234123412341342", 0)
     val logRow = new LogRow(0, logEntry, resourceMgr)
 
-    try {
-      pred(logRow)
-      None
-    } catch {
-      case e: Exception => Some(e)
-    }
+    pred(logRow)
   }
 
   private def logLevelPred(logToggles: Seq[(ToggleButton, LogLevel)]): Option[FilterPredicate] = {
