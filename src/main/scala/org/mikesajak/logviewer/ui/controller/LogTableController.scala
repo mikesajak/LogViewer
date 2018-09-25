@@ -6,10 +6,12 @@ import java.time.format.DateTimeFormatter
 import com.google.common.eventbus.Subscribe
 import com.typesafe.scalalogging.Logger
 import groovy.lang.GroovyShell
-import javafx.beans.value.{ChangeListener, ObservableValue}
 import javafx.collections.ObservableList
 import javafx.geometry.Insets
+import javafx.scene.{control => jfxctrl, layout => jfxlayout}
+import org.controlsfx.control.textfield.TextFields
 import org.controlsfx.control.{BreadCrumbBar, PopOver, SegmentedButton}
+import org.controlsfx.validation.{ValidationResult, ValidationSupport, Validator}
 import org.mikesajak.logviewer.log._
 import org.mikesajak.logviewer.ui.{CachedObservableList, ColorGen, FilteredObservableList, MappedIndexedObservableList}
 import org.mikesajak.logviewer.util.Measure.measure
@@ -23,7 +25,7 @@ import scalafx.scene.CacheHint
 import scalafx.scene.control._
 import scalafx.scene.image.{Image, ImageView}
 import scalafx.scene.input.MouseEvent
-import scalafx.scene.layout.{Priority, VBox}
+import scalafx.scene.layout.{HBox, Priority, VBox}
 import scalafxml.core.macros.sfxml
 
 import scala.collection.JavaConverters._
@@ -65,24 +67,25 @@ class LogTableController(logTableView: TableView[LogRow],
                          bodyColumn: TableColumn[LogRow, String],
 
                          selEntryVBox: VBox,
-                         selEntryTextArea: TextArea,
+                         selectedEntryTextArea: TextArea,
+                         selectedEntryBreadCrumbBar: BreadCrumbBar[String],
 
-                         searchCombo: ComboBox[String], clearSearchButton: Button,
-                         filterCombo: ComboBox[String], clearFilterButton: Button,
-                         filtersTreeView: TreeView[String],
-                         addFilterButton: Button,
-                         replaceFilterButton: Button,
-                         addLogLevelFilterButton: Button,
+                         searchCombo: ComboBox[String],
+                         filtersPanel: HBox,
+                         filtersButtonsPanel: HBox,
+                         filterHistoryButton: Button,
+                         logLevelFilterButton: Button,
+                         advancedFiltersButton: Button,
 
-                         errorLevelToggle: ToggleButton, warnLevelToggle: ToggleButton, infoLevelToggle: ToggleButton,
-                         debugLevelToggle: ToggleButton, traceLevelToggle: ToggleButton, otherLevelToggle: ToggleButton,
-
-                         statusLabel: Label,
+                         statusLeftLabel: Label,
+                         statusRightLabel: Label,
                          splitPane: SplitPane,
 
                          resourceMgr: ResourceManager,
                          eventBus: EventBus) {
   private implicit val logger: Logger = Logger[LogTableController]
+
+  private val filterTextField = TextFields.createClearableTextField()
 
   type FilterPredicate = LogRow => Boolean
 
@@ -92,12 +95,6 @@ class LogTableController(logTableView: TableView[LogRow],
 
   private var logStore: LogStore = ImmutableMemoryLogStore.empty
 
-  private val logLevelToggles = Seq(errorLevelToggle, warnLevelToggle, infoLevelToggle, debugLevelToggle, traceLevelToggle)
-  private val logLevelToggles2 = Seq((errorLevelToggle, LogLevel.Error),
-                                     (warnLevelToggle, LogLevel.Warning),
-                                     (infoLevelToggle, LogLevel.Info),
-                                     (debugLevelToggle, LogLevel.Debug),
-                                     (traceLevelToggle, LogLevel.Trace))
   private val logLevelStyleClassMap = Map[LogLevel, String](
     LogLevel.Error   -> "error",
     LogLevel.Warning -> "warn",
@@ -106,18 +103,33 @@ class LogTableController(logTableView: TableView[LogRow],
     LogLevel.Trace   -> "trace"
   )
 
-  private var filterValidationError: Option[String] = None
+  private var logLevelFilterSelection = LogLevel.values.map(_ -> true).toMap
 
-  init()
+  private var filterValidationError: Option[String] = None
 
   private var sourceColors = Map[String, String]()
   private var threadColors = Map[String, String]()
   private var sessionColors = Map[String, String]()
   private var userColors = Map[String, String]()
 
-  def init() {
-    logTableView.selectionModel.value.selectionMode = SelectionMode.Multiple
+  init()
 
+  def init() {
+    splitPane.vgrow = Priority.Always
+
+    setupTableView()
+
+    setupSearchControls()
+
+    setupFilterControls()
+
+
+    initLogRows(ImmutableMemoryLogStore.empty, None)
+
+    eventBus.register(this)
+  }
+
+  private def setupTableView(): Unit = {
     idColumn.cellValueFactory = {
       _.value.idx
     }
@@ -198,150 +210,180 @@ class LogTableController(logTableView: TableView[LogRow],
       _.value.body
     }
 
-//    logTableView.rowFactory = { tableView =>
-//      val row = new TableRow[LogRow]()
+    //    logTableView.rowFactory = { tableView =>
+    //      val row = new TableRow[LogRow]()
 
-//      row.handleEvent(MouseEvent.MouseClicked) { event: MouseEvent =>
-//        if (!row.isEmpty) {
-//          event.button match {
-//            case MouseButton.Primary =>
-////              val entry = row.item.value.logEntry
-////              selEntryTextArea.text = s"<id=${entry.id}> <level=${entry.level}> <thread=${entry.thread}> " +
-////                s"<sessionId=${entry.sessionId}> <requestId=${entry.requestId}> <userId=${entry.userId}>" +
-////                s"\n\n${entry.rawMessage}"
-//            case MouseButton.Secondary =>
-//            case MouseButton.Middle =>
-//            case _ =>
-//          }
-//        }
-//      }
-//      row
-//    }
+    //      row.handleEvent(MouseEvent.MouseClicked) { event: MouseEvent =>
+    //        if (!row.isEmpty) {
+    //          event.button match {
+    //            case MouseButton.Primary =>
+    ////              val entry = row.item.value.logEntry
+    ////              selEntryTextArea.text = s"<id=${entry.id}> <level=${entry.level}> <thread=${entry.thread}> " +
+    ////                s"<sessionId=${entry.sessionId}> <requestId=${entry.requestId}> <userId=${entry.userId}>" +
+    ////                s"\n\n${entry.rawMessage}"
+    //            case MouseButton.Secondary =>
+    //            case MouseButton.Middle =>
+    //            case _ =>
+    //          }
+    //        }
+    //      }
+    //      row
+    //    }
 
+    logTableView.selectionModel.value.selectionMode = SelectionMode.Single
     logTableView.selectionModel.value.selectedItemProperty().addListener((obs, oldSelRow, newSelRow) => {
       val entry = newSelRow.logEntry
-      val breadCrumbBar = new BreadCrumbBar[String]()
-      val model = BreadCrumbBar.buildTreeModel(newSelRow.index.toString,
-                                               entry.id.source.name, entry.id.source.file,
-                                               entry.id.timestamp.toString, entry.level.toString, entry.thread,
-                                               entry.sessionId, entry.requestId, entry.userId, "")
-      breadCrumbBar.setSelectedCrumb(model.getParent)
-      breadCrumbBar.setAutoNavigationEnabled(false)
-      selEntryVBox.children.setAll(Seq(breadCrumbBar, selEntryTextArea.delegate).asJava)
+      //      val breadCrumbBar = new BreadCrumbBar[String]()
+      //      val model = BreadCrumbBar.buildTreeModel(newSelRow.index.toString,
+      //                                               entry.id.source.name, entry.id.source.file,
+      //                                               entry.id.timestamp.toString, entry.level.toString, entry.thread,
+      //                                               entry.sessionId, entry.requestId, entry.userId, "")
+      //      breadCrumbBar.setSelectedCrumb(model.getParent)
+      //      breadCrumbBar.setAutoNavigationEnabled(false)
+      //      selEntryVBox.children.setAll(Seq(breadCrumbBar, selectedEntryTextArea.delegate).asJava)
 
-      selEntryTextArea.text = s"<id=${entry.id}> <level=${entry.level}> <thread=${entry.thread}> " +
+      selectedEntryTextArea.text = s"<id=${entry.id}> <level=${entry.level}> <thread=${entry.thread}> " +
         s"<sessionId=${entry.sessionId}> <requestId=${entry.requestId}> <userId=${entry.userId}>" +
         s"\n\n${entry.rawMessage}"
     })
+  }
 
-    splitPane.vgrow = Priority.Always
+  private def setupSearchControls(): Unit = {
+    searchCombo.onAction = (ae: ActionEvent) => {
+      val queryText = searchCombo.value.value
+      //      logger.info(s"Search combo ENTER, text=${queryText}")
+      //      filtersTreeView.root.value.children.add(new TreeItem(queryText))
+      val logRows = logTableView.items.value.asScala
+      val curPosition = math.max(logTableView.selectionModel.value.focusedIndex, 0)
 
-    initLogRows(ImmutableMemoryLogStore.empty, None)
+      val foundIdx = logRows.indexWhere(row => row.logEntry.rawMessage.contains(queryText), curPosition)
+      if (foundIdx >= 0) {
+        logTableView.selectionModel.value.clearAndSelect(foundIdx)
+        logTableView.selectionModel.value.focus(foundIdx)
+        logTableView.scrollTo(foundIdx)
+        statusRightLabel.text = ""
+      } else Platform.runLater {
+        statusRightLabel.text = s"Search query not found any results"
+      }
+    }
+  }
 
-    filtersTreeView.root = new TreeItem("")
-    addLogLevelFilterButton.onAction = { ae =>
-      val popOver = new PopOver()
-      val levelToggles = LogLevel.values.map(l => new javafx.scene.control.ToggleButton(l.toString))
-      val levelsSegButton = new SegmentedButton(levelToggles: _*)
-      levelsSegButton.setToggleGroup(null) // allow multi selection
+  private def setupFilterControls(): Unit = {
+//    filtersPanel.children.setAll(filterTextField, filtersButtonsPanel)
+    filterTextField.hgrow = Priority.Always
+    filterTextField.vgrow = Priority.Always
+    filterTextField.setPrefWidth(jfxlayout.Region.USE_COMPUTED_SIZE)
+    filterTextField.setPrefHeight(jfxlayout.Region.USE_COMPUTED_SIZE)
+    filterTextField.setMaxWidth(Double.MaxValue)
+    filterTextField.setMaxHeight(Double.MaxValue)
+    filterTextField.prefColumnCount = 10
+    filtersPanel.hgrow = Priority.Always
 
-      val setButton = new Button {
-        text = "Set"
-        onAction = {
-          println("TODO: Set log level filter")
-          ae => popOver.hide()
+//    val knownWords = Seq("id", "directory", "file", "level", "thread", "sessionId", "requestId", "userId", "body", "rawMessage")
+//    filterCombo.editor.value.textProperty().addListener(new ChangeListener[String]() {
+//      override def changed(observable: ObservableValue[_ <: String], oldValue: String, newValue: String): Unit = {
+//        val text = newValue
+//        // calculate caret pos by hand, because in this listener carent is always 1 char behind...
+//        val diffIdx = oldValue.zip(newValue).indexWhere(e => e._1 != e._2)
+//        val cursorIdx = if (diffIdx < 0) text.length else diffIdx
+//        val lastSegmentIdx = text.lastIndexOf("entry.", cursorIdx)
+//        if (lastSegmentIdx >= 0) {
+//          val segStart = math.min(lastSegmentIdx+ 6, text.length)
+//          val segEnd = math.max(segStart, cursorIdx)
+//          val lastSegment = text.substring(segStart, segEnd)
+//          if (lastSegment.length > 0) {
+//            val nextSpaceIdx = text.indexWhere(ch => !Character.isLetterOrDigit(ch), segStart)
+//            val nextSegmentIdx = if (nextSpaceIdx < 0) text.length else nextSpaceIdx
+//            val hints = knownWords.find(str => str.startsWith(lastSegment))
+//                        .map(matchingWord => (lastSegment, matchingWord.substring(lastSegment.length), text.substring(segStart, nextSegmentIdx)))
+//
+//            hints.map(h => s"${h._1}(${h._2})[${h._3}]")
+//            .reduceLeftOption((a,b) => a + ", " + b)
+//            .foreach(ht => println(s"Filter hints: $ht"))
+//          }
+//        }
+//      }
+//    })
+
+    filterTextField.onAction = (ae: ActionEvent) => {
+      val filterText = filterTextField.text
+      logger.debug(s"Filter combo action, text=$filterText")
+//      updateFilterPredicate()
+    }
+
+    val vs = new ValidationSupport()
+    val filterQueryValidator = new Validator[String]() {
+      override def apply(t: javafx.scene.control.Control, u: String): ValidationResult = {
+        buildPredicate(filterTextField.text.value) match {
+          case Success(predOpt) => new ValidationResult()
+          case Failure(exception) => ValidationResult.fromError(t, s"Filter predicate is not valid. ${exception.getLocalizedMessage}")
         }
       }
+    }
+    vs.registerValidator(filterTextField, true, filterQueryValidator)
 
+    val filterValidationTooltip = new Tooltip()
+    filterTextField.onMouseMoved = (me: MouseEvent) => {
+      filterValidationError.foreach { errorMsg =>
+        filterValidationTooltip.text = errorMsg
+        filterValidationTooltip.show(filterTextField, me.screenX, me.screenY + 15)
+      }
+    }
+    filterTextField.onMouseExited = (me: MouseEvent) => {
+      filterValidationTooltip.hide()
+    }
+
+    filterHistoryButton.onAction = { ae =>
+      val popOver = new PopOver()
+
+      popOver.setTitle("Previous filters")
+      popOver.setDetached(false)
+      popOver.setAutoHide(true)
+      popOver.setHeaderAlwaysVisible(true)
+      popOver.setArrowLocation(PopOver.ArrowLocation.TOP_RIGHT)
+
+      popOver.show(filterHistoryButton.delegate)
+    }
+
+    logLevelFilterButton.onAction = { ae =>
+      val toggle2LevelMapping = LogLevel.values.map( level =>  level -> new jfxctrl.ToggleButton(level.toString))
+      val levelsSegButton = new SegmentedButton(toggle2LevelMapping.map(_._2): _*)
+      levelsSegButton.setToggleGroup(null) // allow multi selection
+
+      toggle2LevelMapping.foreach { case (level, toggle) =>
+        toggle.focusTraversable = false
+        toggle.selected = logLevelFilterSelection(level)
+      }
+
+      val popOver = new PopOver()
+      val setButton = new Button {
+        graphic = new ImageView(resourceMgr.getIcon("icons8-checked-16.png"))
+        onAction = { ae =>
+          logLevelFilterSelection = toggle2LevelMapping.map { case (level, toggle) => level -> toggle.isSelected }.toMap
+          popOver.hide()
+        }
+      }
 
       val hbox = new javafx.scene.layout.HBox(5, levelsSegButton, setButton)
       hbox.margin = new Insets(10)
 
+      popOver.setTitle("Select log level filters")
       popOver.setContentNode(hbox)
       popOver.setArrowLocation(PopOver.ArrowLocation.TOP_RIGHT)
       popOver.setDetachable(false)
-      popOver.show(addLogLevelFilterButton.delegate)
-    }
-
-    searchCombo.onAction = (ae: ActionEvent) => {
-      val queryText = searchCombo.value.value
-      logger.info(s"Search combo ENTER, text=${queryText}")
-      filtersTreeView.root.value.children.add(new TreeItem(queryText))
-    }
-
-    val knownWords = Seq("id", "directory", "file", "level", "thread", "sessionId", "requestId", "userId", "body", "rawMessage")
-
-    filterCombo.editor.value.textProperty().addListener(new ChangeListener[String]() {
-      override def changed(observable: ObservableValue[_ <: String], oldValue: String, newValue: String): Unit = {
-        val text = newValue
-        // calculate caret pos by hand, because in this listener carent is always 1 char behind...
-        val diffIdx = oldValue.zip(newValue).indexWhere(e => e._1 != e._2)
-        val cursorIdx = if (diffIdx < 0) text.length else diffIdx
-        val lastSegmentIdx = text.lastIndexOf("entry.", cursorIdx)
-        if (lastSegmentIdx >= 0) {
-          val segStart = math.min(lastSegmentIdx+ 6, text.length)
-          val segEnd = math.max(segStart, cursorIdx)
-          val lastSegment = text.substring(segStart, segEnd)
-          if (lastSegment.length > 0) {
-            val nextSpaceIdx = text.indexWhere(ch => !Character.isLetterOrDigit(ch), segStart)
-            val nextSegmentIdx = if (nextSpaceIdx < 0) text.length else nextSpaceIdx
-            val hints = knownWords.find(str => str.startsWith(lastSegment))
-              .map(matchingWord => (lastSegment, matchingWord.substring(lastSegment.length), text.substring(segStart, nextSegmentIdx)))
-
-            hints.map(h => s"${h._1}(${h._2})[${h._3}]")
-                 .reduceLeftOption((a,b) => a + ", " + b)
-                 .foreach(ht => println(s"Filter hints: $ht"))
-          }
-        }
-      }
-    })
-
-    filterCombo.onAction = (ae: ActionEvent) => {
-      val filterText = filterCombo.value.value//filterCombo.editor.text.get()
-      logger.debug(s"Filter combo action, text=$filterText")
-      updateFilterPredicate()
-    }
-
-    val filterValidationTooltip = new Tooltip()
-    filterCombo.editor.value.onMouseMoved = (me: MouseEvent) => {
-      filterValidationError.foreach { errorMsg =>
-        filterValidationTooltip.text = errorMsg
-        filterValidationTooltip.show(filterCombo, me.screenX, me.screenY + 15)
-      }
-    }
-    filterCombo.editor.value.onMouseExited = (me: MouseEvent) => {
-      filterValidationTooltip.hide()
-    }
-
-
-    logLevelToggles.foreach { button =>
-      button.onAction = (ae: ActionEvent) => updateFilterPredicate()
-    }
-
-    eventBus.register(this)
-  }
-
-  private def updateFilterPredicate(): Unit = {
-    buildPredicate() match {
-      case Success(predOpt) =>
-        filterCombo.editor.value.styleClass -= "error"
-        filterValidationError = None
-        setFilterPredicate(predOpt)
-
-      case Failure(exception) =>
-        logger.warn(s"Filter predicate is not valid.", exception)
-        filterCombo.editor.value.styleClass += "error"
-        filterValidationError = Some(exceptionMessage(exception))
+      popOver.setHeaderAlwaysVisible(true)
+      popOver.autoHide = true
+      popOver.autoFix = true
+      popOver.show(logLevelFilterButton.delegate)
     }
   }
 
-  private def buildPredicate(): Try[Option[FilterPredicate]] = {
+  private def buildPredicate(expressionString: String): Try[Option[FilterPredicate]] = {
     val toggleButtonPredicate =
-      if (logLevelToggles.forall(!_.isSelected)) None
-      else logLevelPred(logLevelToggles2)
+      if (logLevelFilterSelection.forall(_._2 == false)) None
+      else logLevelPred(logLevelFilterSelection)
 
-    val filterExpression = filterCombo.editor.text.get
-    val expressionPredicate = buildFilterExprPredicate2(filterExpression)
+    val expressionPredicate = buildFilterExprPredicate2(expressionString)
 
     expressionPredicate.map { exprPred =>
       Seq(toggleButtonPredicate, exprPred)
@@ -399,14 +441,14 @@ class LogTableController(logTableView: TableView[LogRow],
     pred(logRow)
   }
 
-  private def logLevelPred(logToggles: Seq[(ToggleButton, LogLevel)]): Option[FilterPredicate] = {
-    logToggles.flatMap { case (toggle, level) => logLevelPred(toggle, level) }
+  private def logLevelPred(selectedLogLevels: Map[LogLevel, Boolean]): Option[FilterPredicate] = {
+    selectedLogLevels.flatMap { case (level, selected) => logLevelPred(level, selected) }
       .reduceLeftOption((p1, p2) => (logRow: LogRow) => p1(logRow) || p2(logRow))
   }
 
-  private def logLevelPred(toggle: ToggleButton, level: LogLevel): Option[FilterPredicate] =
-    if (toggle.isSelected) Some(logRow => logRow.logEntry.level == level)
-    else None //logRow => toggle.isSelected && logRow.logEntry.level == level
+  private def logLevelPred(level: LogLevel, selected: Boolean): Option[FilterPredicate] =
+    if (selected) Some(logRow => logRow.logEntry.level == level)
+    else None
 
   class InvalidFilterExpression(message: String) extends Exception(message)
   class FilterExpressionError(message: String, cause: Exception) extends Exception(message, cause)
@@ -487,17 +529,18 @@ class LogTableController(logTableView: TableView[LogRow],
       }.getOrElse(tableRows)
 
     logTableView.items = visibleItemsList
+    updateStatus()
+  }
 
-    val statusMessage =
-      if (logStore.isEmpty) s"${logStore.size} log entries."
-      else {
-        val firstTimestamp = logStore.first.id.timestamp
-        val lastTimestamp = logStore.last.id.timestamp
-        s"${logStore.size} log total entries, ${logTableView.items.value.size} filtered log entries, time range: ${LogRow.dateTimeFormatter.format(firstTimestamp)} - ${LogRow.dateTimeFormatter.format(lastTimestamp)}"
-      }
-
+  private def updateStatus(): Unit = {
     Platform.runLater {
-      statusLabel.text = statusMessage
+      statusLeftLabel.text =
+        if (logStore.isEmpty) s"${logStore.size} log entries."
+        else {
+          val firstTimestamp = logStore.first.id.timestamp
+          val lastTimestamp = logStore.last.id.timestamp
+          s"${logStore.size} log total entries, ${logTableView.items.value.size} filtered log entries, time range: ${LogRow.dateTimeFormatter.format(firstTimestamp)} - ${LogRow.dateTimeFormatter.format(lastTimestamp)}"
+        }
     }
   }
 

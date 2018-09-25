@@ -27,6 +27,8 @@ class ImmutableMemoryLogStore(entryStore: IndexedSeq[LogEntry], override val ind
     override def compare(x: LocalDateTime, y: LocalDateTime): Int = x.compareTo(y)
   }
 
+  override def entriesIterator: Iterator[LogEntry] = entries.iterator
+
 //  override def range(start: LocalDateTime, end: LocalDateTime): IndexedSeq[LogEntry] = {
 //    val startIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, start) match {
 //      case Found(foundIndex) => foundIndex

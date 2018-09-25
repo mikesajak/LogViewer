@@ -9,95 +9,78 @@
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextArea?>
 <?import javafx.scene.control.TitledPane?>
-<?import javafx.scene.control.ToggleButton?>
 <?import javafx.scene.control.Tooltip?>
-<?import javafx.scene.control.TreeView?>
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.ColumnConstraints?>
+<?import javafx.scene.layout.GridPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.layout.RowConstraints?>
 <?import javafx.scene.layout.VBox?>
+<?import org.controlsfx.control.BreadCrumbBar?>
+<?import org.controlsfx.control.textfield.CustomTextField?>
 
 <SplitPane fx:id="splitPane" dividerPositions="0.6455331412103746" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" orientation="VERTICAL" xmlns="http://javafx.com/javafx/8.0.111" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.mikesajak.logviewer.ui.controller.LogTableController">
    <items>
       <VBox maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" spacing="5.0">
          <children>
-            <HBox spacing="5.0" VBox.vgrow="NEVER">
+            <GridPane hgap="5.0" vgap="5.0">
+              <columnConstraints>
+                <ColumnConstraints halignment="RIGHT" hgrow="NEVER" maxWidth="1.7976931348623157E308" minWidth="10.0" />
+                <ColumnConstraints hgrow="ALWAYS" maxWidth="1.7976931348623157E308" minWidth="10.0" prefWidth="100.0" />
+              </columnConstraints>
+              <rowConstraints>
+                <RowConstraints minHeight="10.0" prefHeight="30.0" vgrow="SOMETIMES" />
+                <RowConstraints minHeight="10.0" prefHeight="30.0" vgrow="SOMETIMES" />
+              </rowConstraints>
                <children>
                   <Label alignment="BASELINE_RIGHT" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" text="Search" />
-                  <ComboBox fx:id="searchCombo" editable="true" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" promptText="Search query" HBox.hgrow="ALWAYS" />
+                  <ComboBox fx:id="searchCombo" editable="true" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" promptText="Search query" GridPane.columnIndex="1" />
+                  <HBox fx:id="filtersPanel" spacing="5.0" GridPane.columnIndex="1" GridPane.hgrow="SOMETIMES" GridPane.rowIndex="1" GridPane.vgrow="SOMETIMES">
+                     <children>
+                        <CustomTextField maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" prefColumnCount="100" promptText="Filter criterium" HBox.hgrow="ALWAYS" />
+                        <Button fx:id="filterHistoryButton" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false">
+                           <graphic>
+                              <ImageView pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../images/icons8-time-machine-16.png" />
+                                 </image>
+                              </ImageView>
+                           </graphic>
+                           <tooltip>
+                              <Tooltip text="Show previous filters" />
+                           </tooltip>
+                        </Button>
+                        <Button fx:id="logLevelFilterButton" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false" text="Log levels">
+                           <graphic>
+                              <ImageView pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../images/icons8-metamorphose-16.png" />
+                                 </image>
+                              </ImageView>
+                           </graphic>
+                           <tooltip>
+                              <Tooltip text="Add log level filter" />
+                           </tooltip>
+                        </Button>
+                        <Button fx:id="advancedFiltersButton" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false">
+                           <graphic>
+                              <ImageView pickOnBounds="true" preserveRatio="true">
+                                 <image>
+                                    <Image url="@../images/icons8-filter-filled-16.png" />
+                                 </image>
+                              </ImageView>
+                           </graphic>
+                           <tooltip>
+                              <Tooltip text="Show advanced filter options" />
+                           </tooltip>
+                        </Button>
+                     </children>
+                  </HBox>
+                  <Label alignment="BASELINE_RIGHT" text="Filter" GridPane.rowIndex="1" />
                </children>
-            </HBox>
-            <VBox>
-               <children>
-                  <TitledPane expanded="false" text="Filters">
-                     <content>
-                        <VBox spacing="5.0">
-                           <children>
-                              <HBox spacing="5.0">
-                                 <children>
-                                    <ComboBox fx:id="filterCombo" editable="true" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" prefWidth="150.0" promptText="Filter criteria" HBox.hgrow="ALWAYS" />
-                                    <Button fx:id="addFilterButton" mnemonicParsing="false">
-                                       <graphic>
-                                          <ImageView pickOnBounds="true" preserveRatio="true">
-                                             <image>
-                                                <Image url="@../images/icons8-add-new-16.png" />
-                                             </image>
-                                          </ImageView>
-                                       </graphic>
-                                       <tooltip>
-                                          <Tooltip text="Append filter on top of a stack" />
-                                       </tooltip>
-                                    </Button>
-                                    <Button fx:id="replaceFilterButton" mnemonicParsing="false">
-                                       <graphic>
-                                          <ImageView pickOnBounds="true" preserveRatio="true">
-                                             <image>
-                                                <Image url="@../images/icons8-edit-file-16.png" />
-                                             </image>
-                                          </ImageView>
-                                       </graphic>
-                                       <tooltip>
-                                          <Tooltip text="Replate filter on top of the stack" />
-                                       </tooltip>
-                                    </Button>
-                                    <Button fx:id="addLogLevelFilterButton" mnemonicParsing="false" text="Log levels">
-                                       <graphic>
-                                          <ImageView pickOnBounds="true" preserveRatio="true">
-                                             <image>
-                                                <Image url="@../images/icons8-high-importance-16.png" />
-                                             </image>
-                                          </ImageView>
-                                       </graphic>
-                                       <tooltip>
-                                          <Tooltip text="Add log level filter" />
-                                       </tooltip>
-                                    </Button>
-                                 </children>
-                              </HBox>
-                              <TreeView fx:id="filtersTreeView" editable="true" prefHeight="200.0" prefWidth="200.0" />
-                              <HBox maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" spacing="5.0">
-                                 <children>
-                                    <ToggleButton fx:id="errorLevelToggle" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false" selected="true" text="Error" />
-                                    <ToggleButton fx:id="warnLevelToggle" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false" selected="true" text="Warning" />
-                                    <ToggleButton fx:id="infoLevelToggle" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false" selected="true" text="Info" />
-                                    <ToggleButton fx:id="debugLevelToggle" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false" selected="true" text="Debug" />
-                                    <ToggleButton fx:id="traceLevelToggle" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false" selected="true" text="Trace" />
-                                    <ToggleButton fx:id="otherLevelToggle" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" mnemonicParsing="false" selected="true" text="Other" />
-                                 </children>
-                              </HBox>
-                           </children>
-                        </VBox>
-                     </content>
-                     <graphic>
-                        <ImageView pickOnBounds="true" preserveRatio="true">
-                           <image>
-                              <Image url="@../images/icons8-stacked-16.png" />
-                           </image>
-                        </ImageView>
-                     </graphic>
-                  </TitledPane>
-               </children>
-            </VBox>
+            </GridPane>
             <TableView fx:id="logTableView" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" tableMenuButtonVisible="true" VBox.vgrow="ALWAYS">
               <columns>
                   <TableColumn fx:id="idColumn" editable="false" prefWidth="44.0" sortable="false" text="Id" />
@@ -114,7 +97,9 @@
             </TableView>
             <HBox maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" VBox.vgrow="NEVER">
                <children>
-                  <Label fx:id="statusLabel" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" text="Label" />
+                  <Label fx:id="statusLeftLabel" text="Label" />
+                  <Pane HBox.hgrow="ALWAYS" />
+                  <Label fx:id="statusRightLabel" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" text="Label" />
                </children>
             </HBox>
          </children>
@@ -123,7 +108,8 @@
          <content>
             <VBox fx:id="selEntryVBox">
                <children>
-                  <TextArea fx:id="selEntryTextArea" editable="false" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" wrapText="true" VBox.vgrow="ALWAYS" />
+                  <BreadCrumbBar fx:id="selectedEntryBreadCrumbBar" autoNavigationEnabled="false" maxHeight="-Infinity" maxWidth="1.7976931348623157E308" minHeight="16.0" minWidth="100.0" VBox.vgrow="NEVER" />
+                  <TextArea fx:id="selectedEntryTextArea" editable="false" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" wrapText="true" VBox.vgrow="ALWAYS" />
                </children>
             </VBox>
          </content>
