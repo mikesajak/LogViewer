@@ -234,13 +234,13 @@ class LogTableController(logTableView: TableView[LogRow],
     logTableView.selectionModel.value.selectedItemProperty().addListener((obs, oldSelRow, newSelRow) => {
       val entry = newSelRow.logEntry
       //      val breadCrumbBar = new BreadCrumbBar[String]()
-      //      val model = BreadCrumbBar.buildTreeModel(newSelRow.index.toString,
-      //                                               entry.id.source.name, entry.id.source.file,
-      //                                               entry.id.timestamp.toString, entry.level.toString, entry.thread,
-      //                                               entry.sessionId, entry.requestId, entry.userId, "")
-      //      breadCrumbBar.setSelectedCrumb(model.getParent)
-      //      breadCrumbBar.setAutoNavigationEnabled(false)
-      //      selEntryVBox.children.setAll(Seq(breadCrumbBar, selectedEntryTextArea.delegate).asJava)
+            val model = BreadCrumbBar.buildTreeModel(newSelRow.index.toString,
+                                                     entry.id.source.name, entry.id.source.file,
+                                                     entry.id.timestamp.toString, entry.level.toString, entry.thread,
+                                                     entry.sessionId, entry.requestId, entry.userId, "")
+      selectedEntryBreadCrumbBar.setSelectedCrumb(model.getParent)
+      selectedEntryBreadCrumbBar.setAutoNavigationEnabled(false)
+      selEntryVBox.children.setAll(Seq(selectedEntryBreadCrumbBar, selectedEntryTextArea.delegate).asJava)
 
       selectedEntryTextArea.text = s"<id=${entry.id}> <level=${entry.level}> <thread=${entry.thread}> " +
         s"<sessionId=${entry.sessionId}> <requestId=${entry.requestId}> <userId=${entry.userId}>" +
