@@ -4,8 +4,8 @@ import java.io.IOException
 import java.util.ResourceBundle
 
 import com.google.inject.{Injector, Module}
-import context.AppContext
 import javafx.scene.Parent
+import org.mikesajak.logviewer.context.AppContext
 import scalafxml.core.FXMLLoader
 import scalafxml.guice.GuiceDependencyResolver
 

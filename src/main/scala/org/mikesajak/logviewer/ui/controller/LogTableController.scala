@@ -9,11 +9,10 @@ import groovy.lang.GroovyShell
 import javafx.collections.ObservableList
 import javafx.geometry.Insets
 import javafx.scene.{control => jfxctrl, layout => jfxlayout}
-import org.controlsfx.control.textfield.TextFields
+import org.controlsfx.control.textfield.CustomTextField
 import org.controlsfx.control.{BreadCrumbBar, PopOver, SegmentedButton}
 import org.controlsfx.validation.{ValidationResult, ValidationSupport, Validator}
 import org.mikesajak.logviewer.log._
-import org.mikesajak.logviewer.ui
 import org.mikesajak.logviewer.ui._
 import org.mikesajak.logviewer.util.Measure.measure
 import org.mikesajak.logviewer.util.{EventBus, ResourceManager}
@@ -72,6 +71,7 @@ class LogTableController(logTableView: TableView[LogRow],
                          selectedEntryBreadCrumbBar: BreadCrumbBar[String],
 
                          searchCombo: ComboBox[String],
+                         filterTextField: CustomTextField,
                          filtersPanel: HBox,
                          filtersButtonsPanel: HBox,
                          filterHistoryButton: Button,
@@ -85,8 +85,6 @@ class LogTableController(logTableView: TableView[LogRow],
                          resourceMgr: ResourceManager,
                          eventBus: EventBus) {
   private implicit val logger: Logger = Logger[LogTableController]
-
-  private val filterTextField = TextFields.createClearableTextField()
 
   type FilterPredicate = LogRow => Boolean
 
@@ -270,7 +268,6 @@ class LogTableController(logTableView: TableView[LogRow],
   }
 
   private def setupFilterControls(): Unit = {
-//    filtersPanel.children.setAll(filterTextField, filtersButtonsPanel)
     filterTextField.hgrow = Priority.Always
     filterTextField.vgrow = Priority.Always
     filterTextField.setPrefWidth(jfxlayout.Region.USE_COMPUTED_SIZE)

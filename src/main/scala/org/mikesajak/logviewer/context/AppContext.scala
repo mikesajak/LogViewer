@@ -1,4 +1,4 @@
-package context
+package org.mikesajak.logviewer.context
 
 import com.google.inject._
 import net.codingwell.scalaguice.ScalaModule

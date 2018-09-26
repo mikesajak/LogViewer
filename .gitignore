@@ -17,9 +17,9 @@ project/plugins/project/
 .cache
 .lib/
 .idea/
-test/*
 
 logviewer.conf
 data/
-test/
+/test/
 out/
+

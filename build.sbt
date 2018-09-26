@@ -1,5 +1,5 @@
 
-name := "LogViewer2"
+name := "LogViewer"
 
 version := "0.1"
 

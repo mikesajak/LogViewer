@@ -2,23 +2,23 @@ package org.mikesajak.logviewer
 
 import com.google.inject.Key
 import com.typesafe.scalalogging.Logger
-import context.AppContext
 import org.mikesajak.logviewer.config.Configuration
+import org.mikesajak.logviewer.context.AppContext
 import org.mikesajak.logviewer.log.LogParserMgr
 import org.mikesajak.logviewer.ui.ConsoleProgressHandler
 import org.mikesajak.logviewer.util.{ResourceManager, UILoader}
-import scalafx.application.{JFXApp, Platform}
-import scalafx.application.JFXApp.PrimaryStage
-import scalafx.scene.Scene
 import scalafx.Includes._
 import scalafx.animation.{KeyFrame, KeyValue, Timeline}
+import scalafx.application.JFXApp.PrimaryStage
+import scalafx.application.{JFXApp, Platform}
+import scalafx.scene.Scene
 import scalafx.util.Duration
 
 object Main extends JFXApp {
   private val logger = Logger("Main")
   private val mainPanelDef: String = "/layout/main-panel.fxml"
 
-  logger.info(s"AfternoonCommander starting")
+  logger.info(s"LogViewer starting")
 
   private val injector = AppContext.globalInjector.createChildInjector()
   private val config = injector.getInstance(classOf[Configuration])
