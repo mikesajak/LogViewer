@@ -13,7 +13,8 @@ import org.controlsfx.control.textfield.TextFields
 import org.controlsfx.control.{BreadCrumbBar, PopOver, SegmentedButton}
 import org.controlsfx.validation.{ValidationResult, ValidationSupport, Validator}
 import org.mikesajak.logviewer.log._
-import org.mikesajak.logviewer.ui.{CachedObservableList, ColorGen, FilteredObservableList, MappedIndexedObservableList}
+import org.mikesajak.logviewer.ui
+import org.mikesajak.logviewer.ui._
 import org.mikesajak.logviewer.util.Measure.measure
 import org.mikesajak.logviewer.util.{EventBus, ResourceManager}
 import scalafx.Includes._
@@ -333,48 +334,58 @@ class LogTableController(logTableView: TableView[LogRow],
       filterValidationTooltip.hide()
     }
 
+    var filterHistoryPopoverVisible = false
     filterHistoryButton.onAction = { ae =>
-      val popOver = new PopOver()
+      if (!filterHistoryPopoverVisible) {
+        filterHistoryPopoverVisible = true
 
-      popOver.setTitle("Previous filters")
-      popOver.setDetached(false)
-      popOver.setAutoHide(true)
-      popOver.setHeaderAlwaysVisible(true)
-      popOver.setArrowLocation(PopOver.ArrowLocation.TOP_RIGHT)
-
-      popOver.show(filterHistoryButton.delegate)
+        new PopOverEx {
+          title = "Previous filters"
+          detachable = false
+          autoHide = true
+          headerAlwaysVisible = true
+          arrowLocation = PopOver.ArrowLocation.TOP_RIGHT
+          onHidden = we => filterHistoryPopoverVisible = false
+        }.show(filterHistoryButton.delegate)
+      }
     }
 
+    var logFilterPopoverVisible = false
     logLevelFilterButton.onAction = { ae =>
-      val toggle2LevelMapping = LogLevel.values.map( level =>  level -> new jfxctrl.ToggleButton(level.toString))
-      val levelsSegButton = new SegmentedButton(toggle2LevelMapping.map(_._2): _*)
-      levelsSegButton.setToggleGroup(null) // allow multi selection
+      if (!logFilterPopoverVisible) {
+        logFilterPopoverVisible = true
 
-      toggle2LevelMapping.foreach { case (level, toggle) =>
-        toggle.focusTraversable = false
-        toggle.selected = logLevelFilterSelection(level)
-      }
+        val toggle2LevelMapping = LogLevel.values.map(level => level -> new jfxctrl.ToggleButton(level.toString))
+        val levelsSegButton = new SegmentedButton(toggle2LevelMapping.map(_._2): _*)
+        levelsSegButton.setToggleGroup(null) // allow multi selection
 
-      val popOver = new PopOver()
-      val setButton = new Button {
-        graphic = new ImageView(resourceMgr.getIcon("icons8-checked-16.png"))
-        onAction = { ae =>
-          logLevelFilterSelection = toggle2LevelMapping.map { case (level, toggle) => level -> toggle.isSelected }.toMap
-          popOver.hide()
+        toggle2LevelMapping.foreach { case (level, toggle) =>
+          toggle.focusTraversable = false
+          toggle.selected = logLevelFilterSelection(level)
         }
+
+        new PopOverEx { popOverThis =>
+          private val setButton = new Button {
+            graphic = new ImageView(resourceMgr.getIcon("icons8-checked-16.png"))
+            onAction = { ae =>
+              logLevelFilterSelection = toggle2LevelMapping.map { case (level, toggle) => level -> toggle.isSelected }.toMap
+              popOverThis.hide()
+            }
+          }
+          val hbox = new javafx.scene.layout.HBox(5, levelsSegButton, setButton)
+          hbox.margin = new Insets(10)
+          setContentNode(hbox)
+
+          title = "Select log level filters"
+          arrowLocation = PopOver.ArrowLocation.TOP_RIGHT
+          detachable = false
+          headerAlwaysVisible = true
+          autoHide = true
+
+          onHidden = we => logFilterPopoverVisible = false
+        }.show(logLevelFilterButton.delegate)
+
       }
-
-      val hbox = new javafx.scene.layout.HBox(5, levelsSegButton, setButton)
-      hbox.margin = new Insets(10)
-
-      popOver.setTitle("Select log level filters")
-      popOver.setContentNode(hbox)
-      popOver.setArrowLocation(PopOver.ArrowLocation.TOP_RIGHT)
-      popOver.setDetachable(false)
-      popOver.setHeaderAlwaysVisible(true)
-      popOver.autoHide = true
-      popOver.autoFix = true
-      popOver.show(logLevelFilterButton.delegate)
     }
   }
 
