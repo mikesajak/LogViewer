@@ -1,0 +1,13 @@
+- time shift (+UI) for source
+    - e.g. logs from one source are delayed by constant time (because of wrong server time etc.), allow to correct it by hand
+- span start end parsers
+    - parse log and find request start/end spans, register all spans
+        - e.g. define regex that will extract request identifier (request id/session id/thread id/user id/anything)
+        - e.g. define separate regexes to identify start and end
+    - show in table view colored lines (vertical) for each span (long for all entries that this span is "covering")
+        - one idea is to use table view cell with graphic, and generate this graphic by hand by drawing as many lines as number of pending requests in any moment
+            - remember to shift lines properly so lines in subsequent rows will connect
+            - use colors do distinguish requests (request id/thread id etc.)
+    - virtually anything can be used for this - make it configurable, allow select by thread, session, request, user etc.
+        - many such "spans" may be displayed - e.g. each span type may have separate table column
+        - allow to add multiple columns at the same time - configurable

@@ -9,7 +9,7 @@ import groovy.lang.GroovyShell
 import javafx.collections.ObservableList
 import javafx.geometry.Insets
 import javafx.scene.{control => jfxctrl}
-import org.controlsfx.control.textfield.{CustomTextField, TextFields}
+import org.controlsfx.control.textfield.{AutoCompletionBinding, CustomTextField, TextFields}
 import org.controlsfx.control.{BreadCrumbBar, PopOver, SegmentedButton}
 import org.mikesajak.logviewer.log._
 import org.mikesajak.logviewer.ui._
@@ -19,7 +19,6 @@ import scalafx.Includes._
 import scalafx.application.Platform
 import scalafx.beans.property.{ObjectProperty, StringProperty}
 import scalafx.collections.ObservableBuffer
-import scalafx.event.ActionEvent
 import scalafx.scene.CacheHint
 import scalafx.scene.control._
 import scalafx.scene.image.{Image, ImageView}
@@ -66,9 +65,10 @@ class LogTableController(logTableView: TableView[LogRow],
 
                          selEntryVBox: VBox,
                          selectedEntryTextArea: TextArea,
-                         selectedEntryBreadCrumbBar: BreadCrumbBar[String],
+                         selectedEntryBreadCrumbBar: BreadCrumbBar[(String, String)],
 
-                         searchCombo: ComboBox[String],
+                         searchTextFieldPanel: HBox, // workaround for scalafxml problem with custom controls (e.g. controlsfx)
+                         searchHistoryButton: Button,
 
                          filtersPanel: HBox,
                          filterTextFieldPanel: HBox, // workaround for scalafxml problem with custom controls (e.g. controlsfx)
@@ -113,6 +113,8 @@ class LogTableController(logTableView: TableView[LogRow],
     splitPane.vgrow = Priority.Always
 
     setupTableView()
+
+    setupMessageDetailsPanel()
 
     setupSearchControls()
 
@@ -224,55 +226,81 @@ class LogTableController(logTableView: TableView[LogRow],
     //      }
     //      row
     //    }
+  }
+
+  private def setupMessageDetailsPanel(): Unit = {
+    val origCrumbFactory = selectedEntryBreadCrumbBar.getCrumbFactory
+    selectedEntryBreadCrumbBar.setCrumbFactory { item =>
+      val crumb = origCrumbFactory.call(item)
+      val (name, value) = item.getValue
+      crumb.setText(value)
+      crumb.setTooltip(new Tooltip(s"$name: $value"))
+      crumb
+    }
 
     logTableView.selectionModel.value.selectionMode = SelectionMode.Single
     logTableView.selectionModel.value.selectedItemProperty().addListener((obs, oldSelRow, newSelRow) => {
       val entry = newSelRow.logEntry
-      //      val breadCrumbBar = new BreadCrumbBar[String]()
-            val model = BreadCrumbBar.buildTreeModel(newSelRow.index.toString,
-                                                     entry.id.source.name, entry.id.source.file,
-                                                     entry.id.timestamp.toString, entry.level.toString, entry.thread,
-                                                     entry.sessionId, entry.requestId, entry.userId, "")
-      selectedEntryBreadCrumbBar.setSelectedCrumb(model.getParent)
+
+      val entrySegments = Seq("Position" -> newSelRow.index.toString,
+                              "Source" -> entry.id.source.name,
+                              "File" -> entry.id.source.file,
+                              "Timestamp" -> LogRow.dateTimeFormatter.format(entry.id.timestamp),
+                              "Log level" -> entry.level.toString,
+                              "Thread" -> entry.thread,
+                              "Session" -> entry.sessionId,
+                              "Request" -> entry.requestId,
+                              "User" -> entry.userId)
+                          .filter(value => value != null)
+
+      val model = BreadCrumbBar.buildTreeModel(entrySegments: _*)
+      selectedEntryBreadCrumbBar.setSelectedCrumb(model)
       selectedEntryBreadCrumbBar.setAutoNavigationEnabled(false)
+
       selEntryVBox.children.setAll(Seq(selectedEntryBreadCrumbBar, selectedEntryTextArea.delegate).asJava)
 
-      selectedEntryTextArea.text = s"<id=${entry.id}> <level=${entry.level}> <thread=${entry.thread}> " +
-        s"<sessionId=${entry.sessionId}> <requestId=${entry.requestId}> <userId=${entry.userId}>" +
-        s"\n\n${entry.rawMessage}"
+
+      selectedEntryTextArea.text = {entry.rawMessage}
     })
   }
 
   private def setupSearchControls(): Unit = {
-    searchCombo.onAction = (ae: ActionEvent) => {
-      val queryText = searchCombo.value.value
-      //      logger.info(s"Search combo ENTER, text=${queryText}")
-      //      filtersTreeView.root.value.children.add(new TreeItem(queryText))
+    val searchTextField = TextFields.createClearableTextField().asInstanceOf[CustomTextField]
+    searchTextField.hgrow = Priority.Always
+    searchTextField.setLeft(new ImageView(resourceMgr.getIcon("icons8-search-16.png")))
+
+    var previousSearches = List[String]()
+    searchTextField.onAction = { ae =>
       val logRows = logTableView.items.value.asScala
       val curPosition = math.max(logTableView.selectionModel.value.focusedIndex, 0)
+      val searchText = searchTextField.text.value
 
-      val foundIdx = logRows.indexWhere(row => row.logEntry.rawMessage.contains(queryText), curPosition)
+      def rowMatch(row: LogRow, text: String) = row.logEntry.rawMessage.contains(text)
+
+//      val searchStartPos = if (rowMatch(logRows(curPosition), searchText)) curPosition + 1
+//                           else curPosition
+      val searchStartPos = curPosition // handle "next search", start from position +1
+
+      previousSearches = searchText :: previousSearches.filter(search => search != searchText).take(100)
+
+      val foundIdx = logRows.indexWhere(row => rowMatch(row, searchText), searchStartPos)
       if (foundIdx >= 0) {
         logTableView.selectionModel.value.clearAndSelect(foundIdx)
         logTableView.selectionModel.value.focus(foundIdx)
         logTableView.scrollTo(foundIdx)
         statusRightLabel.text = ""
+        // TODO: select/hightlight found text in table and raw message panel
       } else Platform.runLater {
         statusRightLabel.text = s"Search query not found any results"
       }
     }
+    searchTextFieldPanel.children.setAll(searchTextField)
+    TextFields.bindAutoCompletion(searchTextField,
+                                  (suggestionRequest: AutoCompletionBinding.ISuggestionRequest) =>
+                                    previousSearches.filter(a => a.startsWith(suggestionRequest.getUserText)).asJavaCollection)
   }
 
   private def setupFilterControls(): Unit = {
-//    filterTextField.hgrow = Priority.Always
-//    filterTextField.vgrow = Priority.Always
-//    filterTextField.setPrefWidth(jfxlayout.Region.USE_COMPUTED_SIZE)
-//    filterTextField.setPrefHeight(jfxlayout.Region.USE_COMPUTED_SIZE)
-//    filterTextField.setMaxWidth(Double.MaxValue)
-//    filterTextField.setMaxHeight(Double.MaxValue)
-//    filterTextField.prefColumnCount = 10
-//    filtersPanel.hgrow = Priority.Always
-
 //    val knownWords = Seq("id", "directory", "file", "level", "thread", "sessionId", "requestId", "userId", "body", "rawMessage")
 //    filterCombo.editor.value.textProperty().addListener(new ChangeListener[String]() {
 //      override def changed(observable: ObservableValue[_ <: String], oldValue: String, newValue: String): Unit = {
