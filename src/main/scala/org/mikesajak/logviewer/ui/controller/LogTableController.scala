@@ -8,10 +8,9 @@ import com.typesafe.scalalogging.Logger
 import groovy.lang.GroovyShell
 import javafx.collections.ObservableList
 import javafx.geometry.Insets
-import javafx.scene.{control => jfxctrl, layout => jfxlayout}
-import org.controlsfx.control.textfield.CustomTextField
+import javafx.scene.{control => jfxctrl}
+import org.controlsfx.control.textfield.{CustomTextField, TextFields}
 import org.controlsfx.control.{BreadCrumbBar, PopOver, SegmentedButton}
-import org.controlsfx.validation.{ValidationResult, ValidationSupport, Validator}
 import org.mikesajak.logviewer.log._
 import org.mikesajak.logviewer.ui._
 import org.mikesajak.logviewer.util.Measure.measure
@@ -24,7 +23,6 @@ import scalafx.event.ActionEvent
 import scalafx.scene.CacheHint
 import scalafx.scene.control._
 import scalafx.scene.image.{Image, ImageView}
-import scalafx.scene.input.MouseEvent
 import scalafx.scene.layout.{HBox, Priority, VBox}
 import scalafxml.core.macros.sfxml
 
@@ -71,9 +69,9 @@ class LogTableController(logTableView: TableView[LogRow],
                          selectedEntryBreadCrumbBar: BreadCrumbBar[String],
 
                          searchCombo: ComboBox[String],
-                         filterTextField: CustomTextField,
+
                          filtersPanel: HBox,
-                         filtersButtonsPanel: HBox,
+                         filterTextFieldPanel: HBox, // workaround for scalafxml problem with custom controls (e.g. controlsfx)
                          filterHistoryButton: Button,
                          logLevelFilterButton: Button,
                          advancedFiltersButton: Button,
@@ -103,8 +101,6 @@ class LogTableController(logTableView: TableView[LogRow],
   )
 
   private var logLevelFilterSelection = LogLevel.values.map(_ -> true).toMap
-
-  private var filterValidationError: Option[String] = None
 
   private var sourceColors = Map[String, String]()
   private var threadColors = Map[String, String]()
@@ -268,14 +264,14 @@ class LogTableController(logTableView: TableView[LogRow],
   }
 
   private def setupFilterControls(): Unit = {
-    filterTextField.hgrow = Priority.Always
-    filterTextField.vgrow = Priority.Always
-    filterTextField.setPrefWidth(jfxlayout.Region.USE_COMPUTED_SIZE)
-    filterTextField.setPrefHeight(jfxlayout.Region.USE_COMPUTED_SIZE)
-    filterTextField.setMaxWidth(Double.MaxValue)
-    filterTextField.setMaxHeight(Double.MaxValue)
-    filterTextField.prefColumnCount = 10
-    filtersPanel.hgrow = Priority.Always
+//    filterTextField.hgrow = Priority.Always
+//    filterTextField.vgrow = Priority.Always
+//    filterTextField.setPrefWidth(jfxlayout.Region.USE_COMPUTED_SIZE)
+//    filterTextField.setPrefHeight(jfxlayout.Region.USE_COMPUTED_SIZE)
+//    filterTextField.setMaxWidth(Double.MaxValue)
+//    filterTextField.setMaxHeight(Double.MaxValue)
+//    filterTextField.prefColumnCount = 10
+//    filtersPanel.hgrow = Priority.Always
 
 //    val knownWords = Seq("id", "directory", "file", "level", "thread", "sessionId", "requestId", "userId", "body", "rawMessage")
 //    filterCombo.editor.value.textProperty().addListener(new ChangeListener[String]() {
@@ -303,33 +299,23 @@ class LogTableController(logTableView: TableView[LogRow],
 //      }
 //    })
 
-    filterTextField.onAction = (ae: ActionEvent) => {
-      val filterText = filterTextField.text
-      logger.debug(s"Filter combo action, text=$filterText")
-//      updateFilterPredicate()
-    }
-
-    val vs = new ValidationSupport()
-    val filterQueryValidator = new Validator[String]() {
-      override def apply(t: javafx.scene.control.Control, u: String): ValidationResult = {
-        buildPredicate(filterTextField.text.value) match {
-          case Success(predOpt) => new ValidationResult()
-          case Failure(exception) => ValidationResult.fromError(t, s"Filter predicate is not valid. ${exception.getLocalizedMessage}")
-        }
+    val filterTextField = TextFields.createClearableTextField().asInstanceOf[CustomTextField]
+    filterTextField.hgrow = Priority.Always
+    filterTextField.setLeft(new ImageView(resourceMgr.getIcon("icons8-filter-16.png")))
+    filterTextField.onAction = { ae =>
+      buildPredicate(filterTextField.text.value) match {
+        case Success(predOpt) =>
+          filterTextField.tooltip = null
+          filterTextField.setLeft(new ImageView(resourceMgr.getIcon("icons8-filter-16.png")))
+          filterTextField.styleClass -= "validation-error"
+          setFilterPredicate(predOpt)
+        case Failure(exception) =>
+          filterTextField.tooltip = s"Filter predicate is not valid. ${exception.getLocalizedMessage}"
+          filterTextField.setLeft(new ImageView(resourceMgr.getIcon("icons8-cancel-16.png")))
+          filterTextField.styleClass += "validation-error"
       }
     }
-    vs.registerValidator(filterTextField, true, filterQueryValidator)
-
-    val filterValidationTooltip = new Tooltip()
-    filterTextField.onMouseMoved = (me: MouseEvent) => {
-      filterValidationError.foreach { errorMsg =>
-        filterValidationTooltip.text = errorMsg
-        filterValidationTooltip.show(filterTextField, me.screenX, me.screenY + 15)
-      }
-    }
-    filterTextField.onMouseExited = (me: MouseEvent) => {
-      filterValidationTooltip.hide()
-    }
+    filterTextFieldPanel.children.setAll(filterTextField)
 
     var filterHistoryPopoverVisible = false
     filterHistoryButton.onAction = { ae =>

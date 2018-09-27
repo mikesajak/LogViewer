@@ -30,3 +30,6 @@
   -fx-text-fill: red;
 }
 
+.validation-error {
+  -fx-text-fill: red;
+}
