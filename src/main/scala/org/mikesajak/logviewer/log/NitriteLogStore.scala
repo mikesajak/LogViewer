@@ -1,7 +1,6 @@
 package org.mikesajak.logviewer.log
 
 import java.io.File
-import java.time.LocalDateTime
 
 import com.typesafe.scalalogging.Logger
 import javafx.collections.ObservableListBase
@@ -10,8 +9,8 @@ import org.dizitart.no2._
 import org.dizitart.no2.filters.Filters
 import org.dizitart.no2.mapper.{Mappable, NitriteMapper}
 import org.mikesajak.logviewer.log.NitriteLogStore.LogEntryConverter
-import org.mikesajak.logviewer.util.{Check, LoggingLevel}
 import org.mikesajak.logviewer.util.Measure.measure
+import org.mikesajak.logviewer.util.{Check, LoggingLevel}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -60,7 +59,7 @@ object NitriteLogStore {
 
     def toLogId(doc: Document): LogId =
       LogId(toLogSource(doc.get("source", classOf[Document])),
-        doc.get("timestamp", classOf[LocalDateTime]),
+        doc.get("timestamp", classOf[Timestamp]),
         doc.get("ordinal", classOf[java.lang.Integer]).toInt)
 
     private def toLogSource(doc: Document) =

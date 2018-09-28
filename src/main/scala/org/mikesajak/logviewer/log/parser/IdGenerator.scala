@@ -1,7 +1,5 @@
 package org.mikesajak.logviewer.log.parser
 
-import java.time.LocalDateTime
-
 import org.mikesajak.logviewer.log._
 
 import scala.collection.mutable
@@ -15,15 +13,15 @@ class SimpleFileParserContext(override val source: LogSource) extends ParserCont
 }
 
 trait IdGenerator {
-  def genId(parserContext: ParserContext, timestamp: LocalDateTime): LogId
+  def genId(parserContext: ParserContext, timestamp: Timestamp): LogId
 }
 
 class SimpleLogIdGenerator extends IdGenerator {
   private val timestampMap = mutable.Map[IdKey, Int]()
 
-  case class IdKey(source: LogSource, timestamp: LocalDateTime)
+  case class IdKey(source: LogSource, timestamp: Timestamp)
 
-  override def genId(parserContext: ParserContext, timestamp: LocalDateTime): LogId = {
+  override def genId(parserContext: ParserContext, timestamp: Timestamp): LogId = {
     val key = IdKey(parserContext.source, timestamp)
     val id = LogId(parserContext.source, timestamp, timestampMap.getOrElse(key, 0))
 

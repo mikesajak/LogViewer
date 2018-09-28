@@ -1,7 +1,7 @@
 package org.mikesajak.logviewer.ui.controller
 
-import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.time.{Duration, LocalDateTime}
 
 import com.google.common.eventbus.Subscribe
 import com.typesafe.scalalogging.Logger
@@ -11,6 +11,7 @@ import javafx.geometry.Insets
 import javafx.scene.{control => jfxctrl}
 import org.controlsfx.control.textfield.{AutoCompletionBinding, CustomTextField, TextFields}
 import org.controlsfx.control.{BreadCrumbBar, PopOver, SegmentedButton}
+import org.mikesajak.logviewer.AppController
 import org.mikesajak.logviewer.log._
 import org.mikesajak.logviewer.ui._
 import org.mikesajak.logviewer.util.Measure.measure
@@ -39,7 +40,7 @@ case class LogRow(index: Int, logEntry: LogEntry, resourceMgr: ResourceManager) 
   import LogRow._
 
   val idx = new StringProperty(index.toString)
-  val timestamp = new StringProperty(dateTimeFormatter.format(logEntry.id.timestamp))
+  val timestamp = new StringProperty(logEntry.id.timestamp.toString)
   val source = new StringProperty(logEntry.id.source.name)
   val file = new StringProperty(logEntry.id.source.file)
   val level = new StringProperty(logEntry.level.toString)
@@ -76,10 +77,13 @@ class LogTableController(logTableView: TableView[LogRow],
                          logLevelFilterButton: Button,
                          advancedFiltersButton: Button,
 
+                         timeShiftButton: Button,
+
                          statusLeftLabel: Label,
                          statusRightLabel: Label,
                          splitPane: SplitPane,
 
+                         appController: AppController,
                          resourceMgr: ResourceManager,
                          eventBus: EventBus) {
   private implicit val logger: Logger = Logger[LogTableController]
@@ -115,6 +119,8 @@ class LogTableController(logTableView: TableView[LogRow],
     setupTableView()
 
     setupMessageDetailsPanel()
+
+    setupToolsButtons()
 
     setupSearchControls()
 
@@ -229,6 +235,9 @@ class LogTableController(logTableView: TableView[LogRow],
   }
 
   private def setupMessageDetailsPanel(): Unit = {
+    // re-initialize panel - because of bug in scalafxml that doesn't support custom controls (e.g. ControlsFX)
+    selEntryVBox.children.setAll(Seq(selectedEntryBreadCrumbBar, selectedEntryTextArea.delegate).asJava)
+
     val origCrumbFactory = selectedEntryBreadCrumbBar.getCrumbFactory
     selectedEntryBreadCrumbBar.setCrumbFactory { item =>
       val crumb = origCrumbFactory.call(item)
@@ -238,30 +247,74 @@ class LogTableController(logTableView: TableView[LogRow],
       crumb
     }
 
-    logTableView.selectionModel.value.selectionMode = SelectionMode.Single
-    logTableView.selectionModel.value.selectedItemProperty().addListener((obs, oldSelRow, newSelRow) => {
-      val entry = newSelRow.logEntry
+    logTableView.selectionModel.value.selectionMode = SelectionMode.Multiple
+    logTableView.selectionModel.value.selectedItems.onChange {
+      val selectionModel = logTableView.selectionModel.value
+      val items = selectionModel.selectedItems
 
-      val entrySegments = Seq("Position" -> newSelRow.index.toString,
-                              "Source" -> entry.id.source.name,
-                              "File" -> entry.id.source.file,
-                              "Timestamp" -> LogRow.dateTimeFormatter.format(entry.id.timestamp),
-                              "Log level" -> entry.level.toString,
-                              "Thread" -> entry.thread,
-                              "Session" -> entry.sessionId,
-                              "Request" -> entry.requestId,
-                              "User" -> entry.userId)
-                          .filter(value => value != null)
+      val selRow = selectionModel.getSelectedItem
+      if (items.nonEmpty && selRow != null) {
+        val entry = selRow.logEntry
 
-      val model = BreadCrumbBar.buildTreeModel(entrySegments: _*)
-      selectedEntryBreadCrumbBar.setSelectedCrumb(model)
-      selectedEntryBreadCrumbBar.setAutoNavigationEnabled(false)
+        val entrySegments = Seq("Position" -> selRow.index.toString,
+                                "Source" -> entry.id.source.name,
+                                "File" -> entry.id.source.file,
+                                "Timestamp" -> entry.id.timestamp.toString,
+                                "Log level" -> entry.level.toString,
+                                "Thread" -> entry.thread,
+                                "Session" -> entry.sessionId,
+                                "Request" -> entry.requestId,
+                                "User" -> entry.userId)
+                            .filter(value => value._2 != null)
 
-      selEntryVBox.children.setAll(Seq(selectedEntryBreadCrumbBar, selectedEntryTextArea.delegate).asJava)
+        val model = BreadCrumbBar.buildTreeModel(entrySegments: _*)
+        selectedEntryBreadCrumbBar.setSelectedCrumb(model)
+        selectedEntryBreadCrumbBar.setAutoNavigationEnabled(false)
 
+        selectedEntryTextArea.text =
+          if (items.size == 1) entry.rawMessage
+          else {
+            val min = items.head.logEntry.id.timestamp
+            val max = items.last.logEntry.id.timestamp
+            val diff = Duration.between(min.time, max.time)
 
-      selectedEntryTextArea.text = {entry.rawMessage}
-    })
+            s"Multi selection: ${items.size} rows, range span: $min - $max ($diff)\n\n${entry.rawMessage}"
+          }
+      }
+    }
+  }
+
+  private def setupToolsButtons(): Unit = {
+    timeShiftButton.onAction = { ae =>
+      val timeShiftPanelLayout = "/layout/timeshift-dialog.fxml"
+      val (contentPane, ctrl) = UILoader.loadScene[TimeShiftPanelController](timeShiftPanelLayout)
+
+      val dialog = Dialogs.mkModalDialog[(String, Long)](appController.mainStage, contentPane)
+      dialog.dialogPane.value.buttonTypes = Seq(ButtonType.Cancel, ButtonType.OK)
+
+      ctrl.init(logStore.indexes.sources.toSeq.sorted, dialog)
+
+      dialog.showAndWait() match {
+        case Some((source, offset: Long)) =>
+          measure(s"Applying time shift of ${offset}ms to all logs frem $source") { () =>
+            logStore.entriesIterator
+            .filter(e => e.id.source.name == source)
+            .foreach(e => e.id.timestamp.offset = offset)
+          }
+
+          val builder = new ImmutableMemoryLogStore.Builder()
+          measure("Adding all log entries to new builder") { () =>
+            logStore.entriesIterator.foreach(e => builder.add(e))
+          }
+
+          setNewLogStore(
+            measure("Building and sorting log store") { () =>
+              builder.build()
+            }
+          )
+        case _ =>
+      }
+    }
   }
 
   private def setupSearchControls(): Unit = {
@@ -454,7 +507,7 @@ class LogTableController(logTableView: TableView[LogRow],
   }
 
   private def testPredicate(pred: FilterPredicate) = {
-    val time = LocalDateTime.now()
+    val time = Timestamp(LocalDateTime.now())
     val logEntry = new SimpleLogEntry(LogId(LogSource("testDir", "testFile"), time, 0),
       LogLevel.Info, "thread-1", "session-1234","reqest-1234", "testuser",
       "Message 12341234123412341234123412341342", 0)
@@ -488,7 +541,7 @@ class LogTableController(logTableView: TableView[LogRow],
         result.asInstanceOf[Boolean]
       } catch {
         case e: Exception =>
-          handleException(text, suppressExceptions, new FilterExpressionError(s"Exception occurred during evaluation of filter expression.\nExpression:\n$text", e))
+          handleException(text, suppressExceptions, new FilterExpressionError(s"Exception occurred during evaluation of filter expression.\nExpression:\n$text\n${e.getLocalizedMessage}", e))
       }
     }
 
@@ -523,10 +576,14 @@ class LogTableController(logTableView: TableView[LogRow],
 
   @Subscribe
   def onLogOpened(request: SetNewLogEntries): Unit = {
-    logger.debug(s"New log requset received, ${request.logStore.size} entries")
+    setNewLogStore(request.logStore)
+  }
+
+  private def setNewLogStore(newLogStore: LogStore) {
+    logger.debug(s"New log requset received, ${newLogStore.size} entries")
 
     measure("Setting table rows") { () =>
-      initLogRows(request.logStore, currentPredicate)
+      initLogRows(newLogStore, currentPredicate)
     }
   }
 
@@ -561,7 +618,7 @@ class LogTableController(logTableView: TableView[LogRow],
         else {
           val firstTimestamp = logStore.first.id.timestamp
           val lastTimestamp = logStore.last.id.timestamp
-          s"${logStore.size} log total entries, ${logTableView.items.value.size} filtered log entries, time range: ${LogRow.dateTimeFormatter.format(firstTimestamp)} - ${LogRow.dateTimeFormatter.format(lastTimestamp)}"
+          s"${logStore.size} log total entries, ${logTableView.items.value.size} filtered log entries, time range: $firstTimestamp - $lastTimestamp}"
         }
     }
   }

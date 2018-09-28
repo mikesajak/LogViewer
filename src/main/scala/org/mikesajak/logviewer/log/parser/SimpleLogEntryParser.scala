@@ -35,7 +35,7 @@ class SimpleLogEntryParser(parserContext: ParserContext, idGenerator: IdGenerato
 
   private def tryParseDate(text: String, dtf: DateTimeFormatter)=
     try {
-      Some(LocalDateTime.parse(text, dtf))
+      Some(Timestamp(LocalDateTime.parse(text, dtf)))
     } catch {
       case e: Exception => None
     }

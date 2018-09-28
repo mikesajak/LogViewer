@@ -1,7 +1,5 @@
 package org.mikesajak.logviewer.log
 
-import java.time.LocalDateTime
-
 class SimpleLogEntry(override val id: LogId,
                      override val level: LogLevel,
                      override val thread: String,
