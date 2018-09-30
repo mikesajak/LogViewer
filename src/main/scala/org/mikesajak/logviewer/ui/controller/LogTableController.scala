@@ -24,7 +24,7 @@ import scalafx.css.PseudoClass
 import scalafx.scene.CacheHint
 import scalafx.scene.control._
 import scalafx.scene.image.{Image, ImageView}
-import scalafx.scene.input.{MouseButton, MouseEvent}
+import scalafx.scene.input.{Clipboard, ClipboardContent, MouseButton, MouseEvent}
 import scalafx.scene.layout.{HBox, Priority, VBox}
 import scalafxml.core.macros.sfxml
 
@@ -158,27 +158,27 @@ class LogTableController(logTableView: TableView[LogRow],
           }
         }
 
-        addCellContextMenu(cell, columnContetxMenuItems(tc.text.value))
+        addCellContextMenu(cell, columnContextMenuItems(tc.text.value))
       }
     }
 
     threadColumn.cellValueFactory = { _.value.thread }
-    threadColumn.cellFactory = prepareColumnCellFactory(columnContetxMenuItems("thread"))
+    threadColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("thread"))
 
     sessionColumn.cellValueFactory = { _.value.session }
-    sessionColumn.cellFactory = prepareColumnCellFactory(columnContetxMenuItems("session"))
+    sessionColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("session"))
 
     requestColumn.cellValueFactory = { _.value.requestId }
-    requestColumn.cellFactory = prepareColumnCellFactory(columnContetxMenuItems("request"))
+    requestColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("request"))
 
     userColumn.cellValueFactory = { _.value.userId }
-    userColumn.cellFactory = prepareColumnCellFactory(columnContetxMenuItems("user"))
+    userColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("user"))
 
     bodyColumn.cellValueFactory = { _.value.body }
     bodyColumn.cellFactory = prepareColumnCellFactory(bodyColumnContetxMenuItems())
   }
 
-  private def prepareColumnCellFactory(contextMenuItems: Seq[MenuItem]) = { tc: TableColumn[LogRow, String] =>
+  private def prepareColumnCellFactory(contextMenuItemsFunc: TableCell[LogRow, _] => Seq[MenuItem]) = { tc: TableColumn[LogRow, String] =>
     new TableCell[LogRow, String]() { cell =>
       item.onChange { (_,_, newValue) =>
         text = newValue
@@ -186,51 +186,79 @@ class LogTableController(logTableView: TableView[LogRow],
         //          this.pseudoClassStateChanged()
       }
 
-      addCellContextMenu(cell, contextMenuItems)
+      addCellContextMenu(cell, contextMenuItemsFunc)
     }
   }
 
-  private def addCellContextMenu(cell: TableCell[_, _], items: Seq[MenuItem]): Unit = {
+  private def addCellContextMenu(cell: TableCell[LogRow, _], itemsFunc: TableCell[LogRow,_] => Seq[MenuItem]): Unit = {
     var ctxMenuVisible = false
     cell.onMouseClicked = { me: MouseEvent => me.button match {
       case MouseButton.Secondary if !ctxMenuVisible =>
         ctxMenuVisible = true
 
-        new ContextMenu(items: _*) {
+        new ContextMenu(itemsFunc(cell): _*) {
           onHidden = we => ctxMenuVisible = false
         }.show(cell, me.screenX, me.screenY)
       case _ =>
     }}
   }
 
-  private def columnContetxMenuItems(column: String): Seq[MenuItem] =
+  private def columnContextMenuItems(column: String) = { cell: TableCell[LogRow, _] =>
     Seq(
-      new MenuItem {
-        text = s"Copy $column value to clipboard"
-        graphic = new ImageView(resourceMgr.getIcon("icons8-copy-to-clipboard-16.png"))
-      },
-      new MenuItem {
-        text = s"Filter list by $column value"
-        graphic = new ImageView(resourceMgr.getIcon("icons8-filter-16.png"))
-      })
+         new MenuItem {
+           text = s"Copy $column value to clipboard"
+           graphic = new ImageView(resourceMgr.getIcon("icons8-copy-to-clipboard-16.png"))
+           onAction = { ae =>
+             val content = new ClipboardContent
+             content.putString(cell.text.value)
+             Clipboard.systemClipboard.content = content
+           }
+        },
+        new MenuItem {
+          text = s"Filter list by $column value"
+          graphic = new ImageView(resourceMgr.getIcon("icons8-filter-16.png"))
+          onAction = { ae =>
+            println(s"TODO: Set filter to ${cell.text.value}")
+          }
+        })
+  }
 
-  private def basicColumnMenuItems(column: String): Seq[MenuItem] =
+  private def basicColumnMenuItems(column: String) = { cell: TableCell[LogRow, _] =>
     Seq(
-      new MenuItem {
-        text = s"Copy $column value to clipboard"
-        graphic = new ImageView(resourceMgr.getIcon("icons8-copy-to-clipboard-16.png"))
-      })
+         new MenuItem {
+           text = s"Copy $column value to clipboard"
+           graphic = new ImageView(resourceMgr.getIcon("icons8-copy-to-clipboard-16.png"))
+           onAction = { ae =>
+             val content = new ClipboardContent
+             content.putString(cell.text.value)
+             Clipboard.systemClipboard.content = content
+           }
+         })
+  }
 
-  private def bodyColumnContetxMenuItems(): Seq[MenuItem] =
+  private def bodyColumnContetxMenuItems() = { cell: TableCell[LogRow, _] =>
     Seq(
-      new MenuItem {
-        text = s"Copy message body to clipboard"
-        graphic = new ImageView(resourceMgr.getIcon("icons8-copy-to-clipboard-16.png"))
-      },
-      new MenuItem {
-        text = s"Copy original message to clipboard"
-        graphic = new ImageView(resourceMgr.getIcon("icons8-copy-to-clipboard-16.png"))
-      })
+         new MenuItem {
+           text = s"Copy message body to clipboard"
+           graphic = new ImageView(resourceMgr.getIcon("icons8-copy-to-clipboard-16.png"))
+           onAction = { ae =>
+             val content = new ClipboardContent
+             val logRow = cell.tableRow.value.item.value.asInstanceOf[LogRow]
+             content.putString(logRow.logEntry.body)
+             Clipboard.systemClipboard.content = content
+           }
+         },
+         new MenuItem {
+           text = s"Copy original message to clipboard"
+           graphic = new ImageView(resourceMgr.getIcon("icons8-copy-to-clipboard-16.png"))
+           onAction = { ae =>
+             val content = new ClipboardContent
+             val logRow = cell.tableRow.value.item.value.asInstanceOf[LogRow]
+             content.putString(logRow.logEntry.rawMessage)
+             Clipboard.systemClipboard.content = content
+           }
+         })
+  }
 
   private def setupMessageDetailsPanel(): Unit = {
     // re-initialize panel - because of bug in scalafxml that doesn't support custom controls (e.g. ControlsFX)
