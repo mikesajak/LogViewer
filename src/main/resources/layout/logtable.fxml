@@ -6,7 +6,7 @@
 <?import javafx.scene.layout.*?>
 <?import org.controlsfx.control.BreadCrumbBar?>
 <?import org.controlsfx.control.textfield.CustomTextField?>
-<SplitPane fx:id="splitPane" dividerPositions="0.6455331412103746" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" orientation="VERTICAL" xmlns="http://javafx.com/javafx/8.0.111" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.mikesajak.logviewer.ui.controller.LogTableController">
+<SplitPane fx:id="splitPane" dividerPositions="0.6455331412103746" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" orientation="VERTICAL" xmlns="http://javafx.com/javafx/8.0.141" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.mikesajak.logviewer.ui.controller.LogTableController">
    <items>
       <VBox maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" spacing="5.0">
          <children>
@@ -134,7 +134,7 @@
             <VBox fx:id="selEntryVBox">
                <children>
                   <BreadCrumbBar fx:id="selectedEntryBreadCrumbBar" autoNavigationEnabled="false" maxHeight="-Infinity" maxWidth="1.7976931348623157E308" minHeight="16.0" minWidth="100.0" VBox.vgrow="NEVER" />
-                  <TextArea fx:id="selectedEntryTextArea" editable="false" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" wrapText="true" VBox.vgrow="ALWAYS" />
+                  <TextArea fx:id="selectedEntryTextArea" editable="false" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" styleClass="message-details-text-area" wrapText="true" VBox.vgrow="ALWAYS" />
                </children>
             </VBox>
          </content>

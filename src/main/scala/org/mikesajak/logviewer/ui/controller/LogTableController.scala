@@ -1,11 +1,10 @@
 package org.mikesajak.logviewer.ui.controller
 
+import java.time.Duration
 import java.time.format.DateTimeFormatter
-import java.time.{Duration, LocalDateTime}
 
 import com.google.common.eventbus.Subscribe
 import com.typesafe.scalalogging.Logger
-import groovy.lang.GroovyShell
 import javafx.collections.ObservableList
 import javafx.geometry.Insets
 import javafx.scene.{control => jfxctrl}
@@ -13,6 +12,7 @@ import org.controlsfx.control.textfield.{AutoCompletionBinding, CustomTextField,
 import org.controlsfx.control.{BreadCrumbBar, PopOver, SegmentedButton}
 import org.mikesajak.logviewer.AppController
 import org.mikesajak.logviewer.log._
+import org.mikesajak.logviewer.ui.FilterExpressionParser.FilterPredicate
 import org.mikesajak.logviewer.ui._
 import org.mikesajak.logviewer.util.Measure.measure
 import org.mikesajak.logviewer.util.{EventBus, ResourceManager}
@@ -20,15 +20,17 @@ import scalafx.Includes._
 import scalafx.application.Platform
 import scalafx.beans.property.{ObjectProperty, StringProperty}
 import scalafx.collections.ObservableBuffer
+import scalafx.css.PseudoClass
 import scalafx.scene.CacheHint
 import scalafx.scene.control._
 import scalafx.scene.image.{Image, ImageView}
+import scalafx.scene.input.{MouseButton, MouseEvent}
 import scalafx.scene.layout.{HBox, Priority, VBox}
 import scalafxml.core.macros.sfxml
 
 import scala.collection.JavaConverters._
 import scala.util.matching.Regex
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 object LogRow {
   val whiteSpacePattern: Regex = """\r\n|\n|\r""".r
@@ -83,12 +85,11 @@ class LogTableController(logTableView: TableView[LogRow],
                          statusRightLabel: Label,
                          splitPane: SplitPane,
 
+                         filterExpressionParser: FilterExpressionParser,
                          appController: AppController,
                          resourceMgr: ResourceManager,
                          eventBus: EventBus) {
   private implicit val logger: Logger = Logger[LogTableController]
-
-  type FilterPredicate = LogRow => Boolean
 
   private var tableRows: ObservableList[LogRow] = ObservableBuffer[LogRow]()
   private var currentPredicate: Option[FilterPredicate] = None
@@ -104,12 +105,7 @@ class LogTableController(logTableView: TableView[LogRow],
     LogLevel.Trace   -> "trace"
   )
 
-  private var logLevelFilterSelection = LogLevel.values.map(_ -> true).toMap
-
-  private var sourceColors = Map[String, String]()
-  private var threadColors = Map[String, String]()
-  private var sessionColors = Map[String, String]()
-  private var userColors = Map[String, String]()
+  private var logLevelFilterSelection: Map[LogLevel, Boolean] = LogLevel.values.map(_ -> true).toMap
 
   init()
 
@@ -133,29 +129,20 @@ class LogTableController(logTableView: TableView[LogRow],
   }
 
   private def setupTableView(): Unit = {
-    idColumn.cellValueFactory = {
-      _.value.idx
-    }
-    sourceColumn.cellValueFactory = {
-      _.value.source
-    }
-    sourceColumn.cellFactory = { tc: TableColumn[LogRow, String] =>
-      new TableCell[LogRow, String]() {
-        item.onChange { (_,_, newValue) =>
-          text = newValue
-          style = s"-fx-background-color: #${sourceColors.getOrElse(newValue, "ffffff")};"
-        }
-      }
-    }
-    fileColumn.cellValueFactory = {
-      _.value.file
-    }
-    timestampColumn.cellValueFactory = {
-      _.value.timestamp
-    }
+    idColumn.cellValueFactory = { _.value.idx }
+
+    sourceColumn.cellValueFactory = { _.value.source }
+    sourceColumn.cellFactory = prepareColumnCellFactory(basicColumnMenuItems("source"))
+
+    fileColumn.cellValueFactory = { _.value.file }
+    fileColumn.cellFactory = prepareColumnCellFactory(basicColumnMenuItems("file"))
+
+    timestampColumn.cellValueFactory = { _.value.timestamp }
+    timestampColumn.cellFactory = prepareColumnCellFactory(basicColumnMenuItems("timestamp"))
+
     levelColumn.cellValueFactory = { t => ObjectProperty(t.value.logEntry.level) }
     levelColumn.cellFactory = { tc: TableColumn[LogRow, LogLevel] =>
-      new TableCell[LogRow, LogLevel]() {
+      new TableCell[LogRow, LogLevel]() { cell =>
         item.onChange { (_, _, newLogLevel) =>
           text = if (newLogLevel != null) newLogLevel.toString else null
           graphic = if (newLogLevel != null) findIconFor(newLogLevel).orNull else null
@@ -164,75 +151,86 @@ class LogTableController(logTableView: TableView[LogRow],
             val value = tableRow.value.item.value
             if (value != null) {
               val logEntry = value.asInstanceOf[LogRow].logEntry
-
-              tableRow.value.styleClass --= logLevelStyleClassMap.values
-              tableRow.value.styleClass -= "other"
-              tableRow.value.styleClass += logLevelStyleClassMap.getOrElse(logEntry.level, "other")
+              logLevelStyleClassMap.foreach { case (level, pc) =>
+                cell.delegate.pseudoClassStateChanged(PseudoClass(pc), if (level == logEntry.level) true else false)
+              }
             }
           }
         }
+
+        addCellContextMenu(cell, columnContetxMenuItems(tc.text.value))
       }
-    }
-    threadColumn.cellValueFactory = {
-      _.value.thread
-    }
-    threadColumn.cellFactory = { tc: TableColumn[LogRow, String] =>
-      new TableCell[LogRow, String]() {
-        item.onChange { (_, _, newValue) =>
-          text = newValue
-          style = s"-fx-background-color: #${threadColors.getOrElse(newValue, "ffffff")};"
-        }
-      }
-    }
-    sessionColumn.cellValueFactory = {
-      _.value.session
-    }
-    sessionColumn.cellFactory = { tc: TableColumn[LogRow, String] =>
-      new TableCell[LogRow, String]() {
-        item.onChange { (_, _, newValue) =>
-          text = newValue
-          style = s"-fx-background-color: #${sessionColors.getOrElse(newValue, "ffffff")};"
-        }
-      }
-    }
-    requestColumn.cellValueFactory = {
-      _.value.requestId
-    }
-    userColumn.cellValueFactory = {
-      _.value.userId
-    }
-    userColumn.cellFactory = { tc: TableColumn[LogRow, String] =>
-      new TableCell[LogRow, String]() {
-        item.onChange { (_, _, newValue) =>
-          text = newValue
-          style = s"-fx-background-color: #${userColors.getOrElse(newValue, "ffffff")};"
-        }
-      }
-    }
-    bodyColumn.cellValueFactory = {
-      _.value.body
     }
 
-    //    logTableView.rowFactory = { tableView =>
-    //      val row = new TableRow[LogRow]()
+    threadColumn.cellValueFactory = { _.value.thread }
+    threadColumn.cellFactory = prepareColumnCellFactory(columnContetxMenuItems("thread"))
 
-    //      row.handleEvent(MouseEvent.MouseClicked) { event: MouseEvent =>
-    //        if (!row.isEmpty) {
-    //          event.button match {
-    //            case MouseButton.Primary =>
-    ////              val entry = row.item.value.logEntry
-    ////              selEntryTextArea.text = s"<id=${entry.id}> <level=${entry.level}> <thread=${entry.thread}> " +
-    ////                s"<sessionId=${entry.sessionId}> <requestId=${entry.requestId}> <userId=${entry.userId}>" +
-    ////                s"\n\n${entry.rawMessage}"
-    //            case MouseButton.Secondary =>
-    //            case MouseButton.Middle =>
-    //            case _ =>
-    //          }
-    //        }
-    //      }
-    //      row
-    //    }
+    sessionColumn.cellValueFactory = { _.value.session }
+    sessionColumn.cellFactory = prepareColumnCellFactory(columnContetxMenuItems("session"))
+
+    requestColumn.cellValueFactory = { _.value.requestId }
+    requestColumn.cellFactory = prepareColumnCellFactory(columnContetxMenuItems("request"))
+
+    userColumn.cellValueFactory = { _.value.userId }
+    userColumn.cellFactory = prepareColumnCellFactory(columnContetxMenuItems("user"))
+
+    bodyColumn.cellValueFactory = { _.value.body }
+    bodyColumn.cellFactory = prepareColumnCellFactory(bodyColumnContetxMenuItems())
   }
+
+  private def prepareColumnCellFactory(contextMenuItems: Seq[MenuItem]) = { tc: TableColumn[LogRow, String] =>
+    new TableCell[LogRow, String]() { cell =>
+      item.onChange { (_,_, newValue) =>
+        text = newValue
+        //          style = s"-fx-background-color: #${sourceColors.getOrElse(newValue, "ffffff")};"
+        //          this.pseudoClassStateChanged()
+      }
+
+      addCellContextMenu(cell, contextMenuItems)
+    }
+  }
+
+  private def addCellContextMenu(cell: TableCell[_, _], items: Seq[MenuItem]): Unit = {
+    var ctxMenuVisible = false
+    cell.onMouseClicked = { me: MouseEvent => me.button match {
+      case MouseButton.Secondary if !ctxMenuVisible =>
+        ctxMenuVisible = true
+
+        new ContextMenu(items: _*) {
+          onHidden = we => ctxMenuVisible = false
+        }.show(cell, me.screenX, me.screenY)
+      case _ =>
+    }}
+  }
+
+  private def columnContetxMenuItems(column: String): Seq[MenuItem] =
+    Seq(
+      new MenuItem {
+        text = s"Copy $column value to clipboard"
+        graphic = new ImageView(resourceMgr.getIcon("icons8-copy-to-clipboard-16.png"))
+      },
+      new MenuItem {
+        text = s"Filter list by $column value"
+        graphic = new ImageView(resourceMgr.getIcon("icons8-filter-16.png"))
+      })
+
+  private def basicColumnMenuItems(column: String): Seq[MenuItem] =
+    Seq(
+      new MenuItem {
+        text = s"Copy $column value to clipboard"
+        graphic = new ImageView(resourceMgr.getIcon("icons8-copy-to-clipboard-16.png"))
+      })
+
+  private def bodyColumnContetxMenuItems(): Seq[MenuItem] =
+    Seq(
+      new MenuItem {
+        text = s"Copy message body to clipboard"
+        graphic = new ImageView(resourceMgr.getIcon("icons8-copy-to-clipboard-16.png"))
+      },
+      new MenuItem {
+        text = s"Copy original message to clipboard"
+        graphic = new ImageView(resourceMgr.getIcon("icons8-copy-to-clipboard-16.png"))
+      })
 
   private def setupMessageDetailsPanel(): Unit = {
     // re-initialize panel - because of bug in scalafxml that doesn't support custom controls (e.g. ControlsFX)
@@ -384,7 +382,7 @@ class LogTableController(logTableView: TableView[LogRow],
     filterTextField.hgrow = Priority.Always
     filterTextField.setLeft(new ImageView(resourceMgr.getIcon("icons8-filter-16.png")))
     filterTextField.onAction = { ae =>
-      buildPredicate(filterTextField.text.value) match {
+      filterExpressionParser.buildPredicate(filterTextField.text.value, logLevelFilterSelection) match {
         case Success(predOpt) =>
           filterTextField.tooltip = null
           filterTextField.setLeft(new ImageView(resourceMgr.getIcon("icons8-filter-16.png")))
@@ -453,107 +451,6 @@ class LogTableController(logTableView: TableView[LogRow],
     }
   }
 
-  private def buildPredicate(expressionString: String): Try[Option[FilterPredicate]] = {
-    val toggleButtonPredicate =
-      if (logLevelFilterSelection.forall(_._2 == false)) None
-      else logLevelPred(logLevelFilterSelection)
-
-    val expressionPredicate = buildFilterExprPredicate2(expressionString)
-
-    expressionPredicate.map { exprPred =>
-      Seq(toggleButtonPredicate, exprPred)
-        .flatten
-        .reduceLeftOption((resultPred, curPred) => (logRow: LogRow) => resultPred(logRow) && curPred(logRow))
-    }
-  }
-
-  private def buildFilterExprPredicate2(filterExpression: String): Try[Option[FilterPredicate]] = {
-    if (filterExpression.nonEmpty) {
-      Try {
-        val expressionPredicateTest = parseFilter(filterExpression, suppressExceptions = false)
-        // test predicate on some basic data
-        testPredicate(expressionPredicateTest)
-
-        parseFilter(filterExpression, suppressExceptions = true)
-      }.map(Some(_))
-    } else Success(None)
-  }
-
-//  private def buildFilterExprPredicate(filterExpression: String): Option[FilterPredicate] = {
-//    if (filterExpression.nonEmpty) {
-//      val expressionPredicateTest = parseFilter(filterExpression, suppressExceptions = false)
-//      // test predicate on some basic data
-//      testPredicate(expressionPredicateTest) match {
-//        case Some(exception) =>
-//          logger.warn(s"Filter predicate is not valid.", exception)
-//          filterCombo.editor.value.styleClass += "error"
-//          filterValidationError = Some(exceptionMessage(exception))
-//          None
-//        case None =>
-//          filterCombo.editor.value.styleClass -= "error"
-//          filterValidationError = None
-//          Some(parseFilter(filterExpression, suppressExceptions = true))
-//      }
-//    } else {
-//      filterCombo.editor.value.styleClass -= "error"
-//      filterValidationError = None
-//      None
-//    }
-//  }
-
-  private def exceptionMessage(ex: Throwable): String = {
-    if (ex.getCause == null || ex.getCause == ex) ex.getLocalizedMessage
-    else ex.getLocalizedMessage + "\n" + exceptionMessage(ex.getCause)
-  }
-
-  private def testPredicate(pred: FilterPredicate) = {
-    val time = Timestamp(LocalDateTime.now())
-    val logEntry = new SimpleLogEntry(LogId(LogSource("testDir", "testFile"), time, 0),
-      LogLevel.Info, "thread-1", "session-1234","reqest-1234", "testuser",
-      "Message 12341234123412341234123412341342", 0)
-    val logRow = new LogRow(0, logEntry, resourceMgr)
-
-    pred(logRow)
-  }
-
-  private def logLevelPred(selectedLogLevels: Map[LogLevel, Boolean]): Option[FilterPredicate] = {
-    selectedLogLevels.flatMap { case (level, selected) => logLevelPred(level, selected) }
-      .reduceLeftOption((p1, p2) => (logRow: LogRow) => p1(logRow) || p2(logRow))
-  }
-
-  private def logLevelPred(level: LogLevel, selected: Boolean): Option[FilterPredicate] =
-    if (selected) Some(logRow => logRow.logEntry.level == level)
-    else None
-
-  class InvalidFilterExpression(message: String) extends Exception(message)
-  class FilterExpressionError(message: String, cause: Exception) extends Exception(message, cause)
-
-  private def parseFilter(text: String, suppressExceptions: Boolean): FilterPredicate = {
-    val shell = new GroovyShell()
-    val script = shell.parse(text)
-    logRow: LogRow => {
-      shell.setVariable("entry", logRow.logEntry)
-      try {
-        val result: AnyRef = script.run()
-        //noinspection ComparingUnrelatedTypes
-        if (!result.isInstanceOf[Boolean])
-          handleException(text, suppressExceptions, new InvalidFilterExpression(s"Filter expression must return Boolean value.\nExpression:\n$text"))
-        result.asInstanceOf[Boolean]
-      } catch {
-        case e: Exception =>
-          handleException(text, suppressExceptions, new FilterExpressionError(s"Exception occurred during evaluation of filter expression.\nExpression:\n$text\n${e.getLocalizedMessage}", e))
-      }
-    }
-
-  }
-
-  private def handleException(expr: String, suppress: Boolean, ex: Exception): Boolean = {
-    if (suppress) {
-      logger.warn(s"An error occurred during preparing filter expression:\n$expr", ex)
-      true
-    } else throw ex
-  }
-
   private def findIconFor(level: LogLevel) = {
     val icon = level match {
       case LogLevel.Error => Some(resourceMgr.getIcon("icons8-error4-16.png"))
@@ -590,8 +487,6 @@ class LogTableController(logTableView: TableView[LogRow],
   private def initLogRows(logStore: LogStore, predicate: Option[FilterPredicate]): Unit = {
     this.logStore = logStore
 
-    initColorMaps()
-
     val logRowList = new MappedIndexedObservableList[LogRow, LogEntry](logStore,
       (index, entry) => new LogRow(index, entry, resourceMgr))
     tableRows = new CachedObservableList(logRowList)
@@ -621,22 +516,6 @@ class LogTableController(logTableView: TableView[LogRow],
           s"${logStore.size} log total entries, ${logTableView.items.value.size} filtered log entries, time range: $firstTimestamp - $lastTimestamp}"
         }
     }
-  }
-
-  private def initColorMaps(): Unit = {
-    val colorGen = new ColorGen
-
-    def initMap(values: Set[String], reservePool: Int) = {
-      val result = values.map(s => s -> colorGen.nextColor() ).toMap
-      for (i <- values.size until reservePool)
-        colorGen.nextColor()
-      result
-    }
-
-    sourceColors = initMap(logStore.indexes.sources, 100)
-    threadColors = initMap(logStore.indexes.threads, 200)
-    sessionColors = initMap(logStore.indexes.sessions, 200)
-    userColors = initMap(logStore.indexes.users, 200)
   }
 
 }

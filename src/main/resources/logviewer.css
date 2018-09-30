@@ -4,7 +4,15 @@
     -fx-fill: red;
 }
 
+.table-view .table-cell:error .text {
+    -fx-fill: red;
+}
+
 .table-view .table-row-cell.warn .text {
+    -fx-fill: blue;
+}
+
+.table-view .table-cell:warn .text {
     -fx-fill: blue;
 }
 
@@ -12,7 +20,15 @@
     -fx-fill: black;
 }
 
+.table-view .table-cell:info .text {
+    -fx-fill: black;
+}
+
 .table-view .table-row-cell.debug .text {
+    -fx-fill: gray;
+}
+
+.table-view .table-cell:debug .text {
     -fx-fill: gray;
 }
 
@@ -20,8 +36,33 @@
     -fx-fill: light-gray;
 }
 
+.table-view .table-cell:trace .text {
+    -fx-fill: light-gray;
+}
+
 .table-view .table-row-cell.other .text {
     -fx-fill: black;
+}
+
+.table-view .table-cell {
+ -fx-font-family: Monospaced;
+ -fx-font-size: 12px;
+}
+
+//Style of each entire row in the table view
+.table-row-cell:selected {
+   /* -fx-border-color:transparent firebrick transparent firebrick  ;
+    -fx-border-width:2.0; */
+}
+
+//Style of each entire row in the table view when is hovered
+.table-row-cell:hover {
+    /*-fx-background-color:light-blue; */
+}
+
+//Style of each entire row in the table view when is getting focused
+.table-row-cell:focused {
+    /*-fx-background-color:purple;*/
 }
 
 .combo-box .error {
@@ -32,4 +73,9 @@
 
 .validation-error {
   -fx-text-fill: red;
+}
+
+.message-details-text-area {
+  -fx-font-family: Monospaced;
+  -fx-font-size: 12px;
 }
