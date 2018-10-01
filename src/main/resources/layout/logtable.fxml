@@ -6,7 +6,7 @@
 <?import javafx.scene.layout.*?>
 <?import org.controlsfx.control.BreadCrumbBar?>
 <?import org.controlsfx.control.textfield.CustomTextField?>
-<SplitPane fx:id="splitPane" dividerPositions="0.6455331412103746" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" orientation="VERTICAL" xmlns="http://javafx.com/javafx/8.0.141" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.mikesajak.logviewer.ui.controller.LogTableController">
+<SplitPane fx:id="splitPane" dividerPositions="0.6455331412103746" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" orientation="VERTICAL" xmlns="http://javafx.com/javafx/8.0.111" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.mikesajak.logviewer.ui.controller.LogTableController">
    <items>
       <VBox maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" spacing="5.0">
          <children>
@@ -115,6 +115,7 @@
                   <TableColumn fx:id="levelColumn" editable="false" minWidth="0.0" sortable="false" text="Level" />
                   <TableColumn fx:id="threadColumn" editable="false" prefWidth="250.0" sortable="false" text="Thread" />
                   <TableColumn fx:id="sessionColumn" editable="false" minWidth="0.0" prefWidth="110.0" sortable="false" text="Session" />
+                  <TableColumn fx:id="spansColumn" prefWidth="75.0" text="Spans" />
                   <TableColumn fx:id="requestColumn" prefWidth="230.0" text="Request" />
                   <TableColumn fx:id="userColumn" prefWidth="70.0" text="User" />
                   <TableColumn fx:id="bodyColumn" editable="false" prefWidth="1000.0" sortable="false" text="Body" />

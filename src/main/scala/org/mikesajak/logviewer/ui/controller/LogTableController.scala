@@ -48,6 +48,7 @@ case class LogRow(index: Int, logEntry: LogEntry, resourceMgr: ResourceManager) 
   val level = new StringProperty(logEntry.level.toString)
   val thread = new StringProperty(logEntry.thread)
   val session = new StringProperty(logEntry.sessionId)
+  val spans = new StringProperty("")
   val requestId = new StringProperty(logEntry.requestId)
   val userId = new StringProperty(logEntry.userId)
   val body = new StringProperty(whiteSpacePattern.replaceAllIn(logEntry.body, "\\\\n"))
@@ -62,6 +63,7 @@ class LogTableController(logTableView: TableView[LogRow],
                          levelColumn: TableColumn[LogRow, LogLevel],
                          threadColumn: TableColumn[LogRow, String],
                          sessionColumn: TableColumn[LogRow, String],
+                         spansColumn: TableColumn[LogRow, String], // TODO: use specialized type for spans value (not string)
                          requestColumn: TableColumn[LogRow, String],
                          userColumn: TableColumn[LogRow, String],
                          bodyColumn: TableColumn[LogRow, String],
@@ -167,6 +169,23 @@ class LogTableController(logTableView: TableView[LogRow],
 
     sessionColumn.cellValueFactory = { _.value.session }
     sessionColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("session"))
+
+
+    spansColumn.cellValueFactory = { _.value.spans }
+    val spanImageCreator = new SpanImageCreator
+    spansColumn.cellFactory = { tc: TableColumn[LogRow, String] =>
+      new TableCell[LogRow, String]() { cell =>
+        item.onChange { (_, _, newValue) =>
+          text = if (newValue != null) newValue.toString else ""
+          val canvas = spanImageCreator.drawSpans(8, IndexedSeq(0, 1, 3, 4, 5, 7))
+          canvas.margin = new Insets(0,0,0,0)
+          graphic = canvas
+        }
+
+        cell.margin = new Insets(0,0,0,0)
+        cell.padding = new Insets(0,0,0,0)
+      }
+    }
 
     requestColumn.cellValueFactory = { _.value.requestId }
     requestColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("request"))

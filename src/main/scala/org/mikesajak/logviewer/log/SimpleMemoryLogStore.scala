@@ -3,7 +3,6 @@ import java.time.LocalDateTime
 
 import com.typesafe.scalalogging.Logger
 import javafx.collections.ObservableListBase
-import org.mikesajak.logviewer.log.span.Span
 
 import scala.collection.immutable.TreeSet
 import scala.collection.mutable
@@ -71,7 +70,8 @@ class ImmutableIndexes(override val sources: Set[String],
                        override val sessions: Set[String],
                        override val users: Set[String]) extends Indexes {
 
-  override def spansForEntry(logId: LogId): Seq[Span] = ???
+//  override def spansForEntry(logId: LogId): Seq[Span] = ???
+  override def spansForTime(time: Timestamp) = ???
 }
 
 object ImmutableIndexes {
