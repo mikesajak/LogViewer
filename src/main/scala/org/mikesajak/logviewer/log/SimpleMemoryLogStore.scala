@@ -3,6 +3,7 @@ import java.time.LocalDateTime
 
 import com.typesafe.scalalogging.Logger
 import javafx.collections.ObservableListBase
+import org.mikesajak.logviewer.log.span.Span
 
 import scala.collection.immutable.TreeSet
 import scala.collection.mutable
@@ -68,7 +69,10 @@ class IndexedSeqRangeWrapper[A](internalSeq: IndexedSeq[A], startIdx: Int, endId
 class ImmutableIndexes(override val sources: Set[String],
                        override val threads: Set[String],
                        override val sessions: Set[String],
-                       override val users: Set[String]) extends Indexes
+                       override val users: Set[String]) extends Indexes {
+
+  override def spansForEntry(logId: LogId): Seq[Span] = ???
+}
 
 object ImmutableIndexes {
   val empty = new ImmutableIndexes(Set.empty, Set.empty, Set.empty, Set.empty)

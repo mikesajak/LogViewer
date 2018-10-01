@@ -1,6 +1,7 @@
 package org.mikesajak.logviewer.log
 
 import javafx.collections.ObservableList
+import org.mikesajak.logviewer.log.span.Span
 
 trait LogStoreBuilder {
   def size: Long
@@ -17,6 +18,7 @@ trait Indexes {
   def threads: Set[String]
   def sessions: Set[String]
   def users: Set[String]
+  def spansForEntry(logId: LogId): Seq[Span]
 }
 
 trait LogStore extends ObservableList[LogEntry] {
