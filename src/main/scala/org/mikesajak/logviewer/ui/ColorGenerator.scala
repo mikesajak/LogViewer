@@ -166,6 +166,6 @@ class SimpleColorGenerator extends ColorGenerator {
     else colors(idx % colors.size)
 
   override def getColor(identifier: String): Color =
-    colors(identifier.hashCode % colors.size)
+    colors(math.abs(identifier.hashCode % colors.size))
 }
 

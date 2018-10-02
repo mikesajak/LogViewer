@@ -46,7 +46,7 @@
 
 .table-view .table-cell {
  -fx-font-family: Monospaced;
- -fx-font-size: 12px;
+ -fx-font-size: 11px;
 }
 
 //Style of each entire row in the table view

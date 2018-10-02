@@ -6,8 +6,8 @@ class SpanImageCreator {
 
   val colorGenerator = new SimpleColorGenerator
 
-  val spanLineWidth = 6
-  val spanWidth = 7
+  val spanLineWidth = 5
+  val spanWidth = 6
   val spanHeight = 16
 
   
@@ -27,6 +27,14 @@ class SpanImageCreator {
       gc.strokeLine(spanImagePos, 0, spanImagePos, canvas.height.value)
     }
 
+    canvas
+  }
+
+  def getColorBoxFor(id: String, size: Int): Canvas = {
+    val canvas = new Canvas(size, size)
+    val gc = canvas.graphicsContext2D
+    gc.fill = colorGenerator.getColor(id)
+    gc.fillRect(0, 0, size, size)
     canvas
   }
 

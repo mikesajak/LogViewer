@@ -134,10 +134,10 @@ class LogTableController(logTableView: TableView[LogRow],
     idColumn.cellValueFactory = { _.value.idx }
 
     sourceColumn.cellValueFactory = { _.value.source }
-    sourceColumn.cellFactory = prepareColumnCellFactory(basicColumnMenuItems("source"))
+    sourceColumn.cellFactory = prepareColumnCellFactory(basicColumnMenuItems("source"), Some("source"))
 
     fileColumn.cellValueFactory = { _.value.file }
-    fileColumn.cellFactory = prepareColumnCellFactory(basicColumnMenuItems("file"))
+    fileColumn.cellFactory = prepareColumnCellFactory(basicColumnMenuItems("file"), Some("file"))
 
     timestampColumn.cellValueFactory = { _.value.timestamp }
     timestampColumn.cellFactory = prepareColumnCellFactory(basicColumnMenuItems("timestamp"))
@@ -165,42 +165,44 @@ class LogTableController(logTableView: TableView[LogRow],
     }
 
     threadColumn.cellValueFactory = { _.value.thread }
-    threadColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("thread"))
+    threadColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("thread"), Some("thread"))
 
     sessionColumn.cellValueFactory = { _.value.session }
-    sessionColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("session"))
+    sessionColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("session"), Some("session"))
 
 
     spansColumn.cellValueFactory = { _.value.spans }
-    val spanImageCreator = new SpanImageCreator
     spansColumn.cellFactory = { tc: TableColumn[LogRow, String] =>
       new TableCell[LogRow, String]() { cell =>
         item.onChange { (_, _, newValue) =>
           text = if (newValue != null) newValue.toString else ""
-          val canvas = spanImageCreator.drawSpans(8, IndexedSeq(0, 1, 3, 4, 5, 7))
-          canvas.margin = new Insets(0,0,0,0)
-          graphic = canvas
+          graphic = spanImageCreator.drawSpans(8, IndexedSeq(0, 1, 3, 4, 5, 7))
         }
-
-        cell.margin = new Insets(0,0,0,0)
-        cell.padding = new Insets(0,0,0,0)
       }
     }
 
     requestColumn.cellValueFactory = { _.value.requestId }
-    requestColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("request"))
+    requestColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("request"), Some("request"))
+
+      //prepareColumnCellFactory(columnContextMenuItems("request"))
 
     userColumn.cellValueFactory = { _.value.userId }
-    userColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("user"))
+    userColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("user"), Some("user"))
 
     bodyColumn.cellValueFactory = { _.value.body }
     bodyColumn.cellFactory = prepareColumnCellFactory(bodyColumnContetxMenuItems())
   }
 
-  private def prepareColumnCellFactory(contextMenuItemsFunc: TableCell[LogRow, _] => Seq[MenuItem]) = { tc: TableColumn[LogRow, String] =>
+  val spanImageCreator = new SpanImageCreator
+
+  private def prepareColumnCellFactory(contextMenuItemsFunc: TableCell[LogRow, _] => Seq[MenuItem],
+                                       colorPool: Option[String] = None) = { tc: TableColumn[LogRow, String] =>
     new TableCell[LogRow, String]() { cell =>
       item.onChange { (_,_, newValue) =>
         text = newValue
+        graphic = if (newValue != null)
+                    colorPool.map(p => spanImageCreator.getColorBoxFor(newValue, 8)).orNull
+                  else null
         //          style = s"-fx-background-color: #${sourceColors.getOrElse(newValue, "ffffff")};"
         //          this.pseudoClassStateChanged()
       }
