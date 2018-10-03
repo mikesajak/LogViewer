@@ -13,6 +13,7 @@ trait LogStoreBuilder {
 }
 
 trait Indexes {
+  def idToIdx: Map[LogId, Int]
   def sources: Set[String]
   def threads: Set[String]
   def sessions: Set[String]

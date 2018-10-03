@@ -7,9 +7,10 @@ import com.google.common.base.Stopwatch
 import com.google.common.eventbus.Subscribe
 import com.typesafe.scalalogging.Logger
 import org.mikesajak.logviewer.log.parser._
+import org.mikesajak.logviewer.log.span.{RequestIdMarkerMatcher, SpanParser, SpanStore}
 import org.mikesajak.logviewer.util.EventBus
 import org.mikesajak.logviewer.util.Measure.measure
-import org.mikesajak.logviewer.{AppendLogRequest, OpenLogRequest, log}
+import org.mikesajak.logviewer.{AppendLogRequest, OpenLogRequest}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
@@ -38,10 +39,15 @@ class LogParserMgr(eventBus: EventBus, globalState: GlobalState) {
         logStoreBuilder.build()
       }
 
-      logger.info(s"Created new log store with ${logStore.size} entries.")
+      val spanStore = measure("Parsing spans and building span store") { () =>
+        val spanParser = new SpanParser(new RequestIdMarkerMatcher) // TODO: configurable/pluggable matchers etc.
+        spanParser.buildSpanStore(logStore.entriesIterator.toSeq)
+      }
+
+      logger.info(s"Created new log store with ${logStore.size} entries, and span store with ${spanStore.size} spans.")
 
       globalState.currentLogStore = logStore
-      eventBus.publish(SetNewLogEntries(logStore))
+      eventBus.publish(SetNewLogEntries(logStore, spanStore))
     }
   }
 
@@ -63,8 +69,13 @@ class LogParserMgr(eventBus: EventBus, globalState: GlobalState) {
         logStoreBuilder.build()
       }
 
+      val spanStore = measure("Parsing spans and building span store") { () =>
+        val spanParser = new SpanParser(new RequestIdMarkerMatcher) // TODO: configurable/pluggable matchers etc.
+        spanParser.buildSpanStore(logStore.entriesIterator.toSeq)
+      }
+
       globalState.currentLogStore = logStore
-      eventBus.publish(SetNewLogEntries(logStore))
+      eventBus.publish(SetNewLogEntries(logStore, spanStore))
     }
   }
 
@@ -111,7 +122,7 @@ class LogParserMgr(eventBus: EventBus, globalState: GlobalState) {
 
 }
 
-case class SetNewLogEntries(logStore: LogStore)
-case class AppendLogEntries(logStoreBuilder: ImmutableMemoryLogStore.Builder) // TODO: do something smarter than that
+case class SetNewLogEntries(logStore: LogStore, spanStore: SpanStore)
+case class AppendLogEntries(logStoreBuilder: ImmutableMemoryLogStore.Builder, spanStore: SpanStore) // TODO: do something smarter than that
 
 case class ParseProgress(progress: Float, message: String)

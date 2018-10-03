@@ -65,7 +65,8 @@ class IndexedSeqRangeWrapper[A](internalSeq: IndexedSeq[A], startIdx: Int, endId
   override def apply(idx: Int): A = internalSeq(startIdx + idx)
 }
 
-class ImmutableIndexes(override val sources: Set[String],
+class ImmutableIndexes(override val idToIdx: Map[LogId, Int],
+                       override val sources: Set[String],
                        override val threads: Set[String],
                        override val sessions: Set[String],
                        override val users: Set[String]) extends Indexes {
@@ -75,7 +76,7 @@ class ImmutableIndexes(override val sources: Set[String],
 }
 
 object ImmutableIndexes {
-  val empty = new ImmutableIndexes(Set.empty, Set.empty, Set.empty, Set.empty)
+  val empty = new ImmutableIndexes(Map.empty, Set.empty, Set.empty, Set.empty, Set.empty)
 }
 
 object ImmutableMemoryLogStore {
@@ -85,10 +86,11 @@ object ImmutableMemoryLogStore {
     private val logger = Logger[ImmutableMemoryLogStore.Builder]
     private val entries = new mutable.TreeSet[LogEntry]()
 
-    private var sources = new TreeSet[String]()
-    private var threads = new TreeSet[String]()
-    private var sessions = new TreeSet[String]()
-    private var users = new TreeSet[String]()
+    private val idToIdx = mutable.Map[LogId, Int]()
+    private val sources = mutable.TreeSet[String]()
+    private val threads = mutable.TreeSet[String]()
+    private val sessions = mutable.TreeSet[String]()
+    private val users = mutable.TreeSet[String]()
 
     override def threadSafe: Boolean = true
 
@@ -107,8 +109,16 @@ object ImmutableMemoryLogStore {
     }
 
     override def build(): LogStore = synchronized {
-      new ImmutableMemoryLogStore(entries.toIndexedSeq,
-                                  new ImmutableIndexes(sources, threads, sessions, users))
+      val indexedEntries = entries.toIndexedSeq
+      for (i <- indexedEntries.indices)
+        idToIdx(indexedEntries(i).id) = i
+
+      new ImmutableMemoryLogStore(indexedEntries,
+                                  new ImmutableIndexes(idToIdx.toMap,
+                                                       TreeSet.empty ++ sources,
+                                                       TreeSet.empty ++ threads,
+                                                       TreeSet.empty ++ sessions,
+                                                       TreeSet.empty ++ users))
     }
 
     private def updateIndexes(entry: LogEntry): Unit = {

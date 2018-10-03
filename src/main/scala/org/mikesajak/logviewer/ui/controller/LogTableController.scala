@@ -12,6 +12,7 @@ import org.controlsfx.control.textfield.{AutoCompletionBinding, CustomTextField,
 import org.controlsfx.control.{BreadCrumbBar, PopOver, SegmentedButton}
 import org.mikesajak.logviewer.AppController
 import org.mikesajak.logviewer.log._
+import org.mikesajak.logviewer.log.span.{RequestIdMarkerMatcher, SpanParser, SpanStore}
 import org.mikesajak.logviewer.ui.FilterExpressionParser.FilterPredicate
 import org.mikesajak.logviewer.ui._
 import org.mikesajak.logviewer.util.Measure.measure
@@ -24,7 +25,7 @@ import scalafx.css.PseudoClass
 import scalafx.scene.CacheHint
 import scalafx.scene.control._
 import scalafx.scene.image.{Image, ImageView}
-import scalafx.scene.input.{Clipboard, ClipboardContent, MouseButton, MouseEvent}
+import scalafx.scene.input._
 import scalafx.scene.layout.{HBox, Priority, VBox}
 import scalafxml.core.macros.sfxml
 
@@ -41,17 +42,18 @@ object LogRow {
 case class LogRow(index: Int, logEntry: LogEntry, resourceMgr: ResourceManager) {
   import LogRow._
 
-  val idx = new StringProperty(index.toString)
-  val timestamp = new StringProperty(logEntry.id.timestamp.toString)
-  val source = new StringProperty(logEntry.id.source.name)
-  val file = new StringProperty(logEntry.id.source.file)
-  val level = new StringProperty(logEntry.level.toString)
-  val thread = new StringProperty(logEntry.thread)
-  val session = new StringProperty(logEntry.sessionId)
-  val spans = new StringProperty("")
-  val requestId = new StringProperty(logEntry.requestId)
-  val userId = new StringProperty(logEntry.userId)
-  val body = new StringProperty(whiteSpacePattern.replaceAllIn(logEntry.body, "\\\\n"))
+  val idx = StringProperty(index.toString)
+  val timestamp = StringProperty(logEntry.id.timestamp.toString)
+  val source = StringProperty(logEntry.id.source.name)
+  val file = StringProperty(logEntry.id.source.file)
+  val level = StringProperty(logEntry.level.toString)
+  val thread = StringProperty(logEntry.thread)
+  val session = StringProperty(logEntry.sessionId)
+  val spans = StringProperty("")
+  val requestId = StringProperty(logEntry.requestId)
+  val userId = StringProperty(logEntry.userId)
+  val body = StringProperty(whiteSpacePattern.replaceAllIn(logEntry.body, "\\\\n"))
+  val observableLogEntry = ObjectProperty(logEntry)
 }
 
 @sfxml
@@ -63,14 +65,10 @@ class LogTableController(logTableView: TableView[LogRow],
                          levelColumn: TableColumn[LogRow, LogLevel],
                          threadColumn: TableColumn[LogRow, String],
                          sessionColumn: TableColumn[LogRow, String],
-                         spansColumn: TableColumn[LogRow, String], // TODO: use specialized type for spans value (not string)
+                         spansColumn: TableColumn[LogRow, LogEntry], // TODO: use specialized type for spans value (not string)
                          requestColumn: TableColumn[LogRow, String],
                          userColumn: TableColumn[LogRow, String],
                          bodyColumn: TableColumn[LogRow, String],
-
-                         selEntryVBox: VBox,
-                         selectedEntryTextArea: TextArea,
-                         selectedEntryBreadCrumbBar: BreadCrumbBar[(String, String)],
 
                          searchTextFieldPanel: HBox, // workaround for scalafxml problem with custom controls (e.g. controlsfx)
                          searchHistoryButton: Button,
@@ -87,6 +85,12 @@ class LogTableController(logTableView: TableView[LogRow],
                          statusRightLabel: Label,
                          splitPane: SplitPane,
 
+                         selEntryVBox: VBox,
+                         selectedEntryTextArea: TextArea,
+                         selectedEntryBreadCrumbBar: BreadCrumbBar[(String, String)],
+
+                         pendingSpansTextArea: TextArea,
+
                          filterExpressionParser: FilterExpressionParser,
                          appController: AppController,
                          resourceMgr: ResourceManager,
@@ -98,6 +102,7 @@ class LogTableController(logTableView: TableView[LogRow],
   private var filterStack = IndexedSeq[FilterPredicate]()
 
   private var logStore: LogStore = ImmutableMemoryLogStore.empty
+  private var spanStore: SpanStore = SpanStore.empty
 
   private val logLevelStyleClassMap = Map[LogLevel, String](
     LogLevel.Error   -> "error",
@@ -125,7 +130,7 @@ class LogTableController(logTableView: TableView[LogRow],
     setupFilterControls()
 
 
-    initLogRows(ImmutableMemoryLogStore.empty, None)
+    initLogRows(ImmutableMemoryLogStore.empty, SpanStore.empty, None)
 
     eventBus.register(this)
   }
@@ -171,26 +176,60 @@ class LogTableController(logTableView: TableView[LogRow],
     sessionColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("session"), Some("session"))
 
 
-    spansColumn.cellValueFactory = { _.value.spans }
-    spansColumn.cellFactory = { tc: TableColumn[LogRow, String] =>
-      new TableCell[LogRow, String]() { cell =>
-        item.onChange { (_, _, newValue) =>
-          text = if (newValue != null) newValue.toString else ""
-          graphic = spanImageCreator.drawSpans(8, IndexedSeq(0, 1, 3, 4, 5, 7))
+    spansColumn.cellValueFactory = { _.value.observableLogEntry }
+    spansColumn.cellFactory = { tc: TableColumn[LogRow, LogEntry] =>
+      new TableCell[LogRow, LogEntry]() { cell =>
+        item.onChange { (_, _, newLogEntry) =>
+          text = "x"//if (newLogEntry != null) newLogEntry.toString else ""
+          graphic = if (newLogEntry != null) {
+            val spansToShow: Seq[(String, Boolean)] = getSpansForEntry(newLogEntry, tableRow.value.getIndex)
+            spanImageCreator.drawSpans(spansToShow, newLogEntry.requestId)
+          } else null
         }
       }
     }
 
     requestColumn.cellValueFactory = { _.value.requestId }
-    requestColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("request"), Some("request"))
+    requestColumn.cellFactory = { tc: TableColumn[LogRow, String] =>
+      new TableCell[LogRow, String]() { cell =>
+        item.onChange { (_,_, newValue) =>
+          text = newValue
+          graphic = if (newValue != null) {
+            val span = spanStore.get("RequestId", newValue)
+            val row = tableRow.value.item.value.asInstanceOf[LogRow]
 
-      //prepareColumnCellFactory(columnContextMenuItems("request"))
+            if (span.logIds.head == row.logEntry.id)           spanImageCreator.getBeginSpanIcon(newValue, 16)
+            else if (span.logIds.last == row.logEntry.id)      spanImageCreator.getEndSpanIcon(newValue, 16)
+            else if (span.logIds.size == 1)                    spanImageCreator.getOneElementSpanIcon(newValue, 16)
+            else if (span.contains(row.logEntry.id.timestamp)) spanImageCreator.getMiddleSpanIcon(newValue, 16)
+            else null
+
+          } else null
+          //          style = s"-fx-background-color: #${sourceColors.getOrElse(newValue, "ffffff")};"
+          //          this.pseudoClassStateChanged()
+        }
+
+        addCellContextMenu(cell, columnContextMenuItems("request"))
+      }
+    }
+
+
+//      prepareColumnCellFactory(columnContextMenuItems("request"), Some("request"))
 
     userColumn.cellValueFactory = { _.value.userId }
     userColumn.cellFactory = prepareColumnCellFactory(columnContextMenuItems("user"), Some("user"))
 
     bodyColumn.cellValueFactory = { _.value.body }
     bodyColumn.cellFactory = prepareColumnCellFactory(bodyColumnContetxMenuItems())
+  }
+
+  private def getSpansForEntry(newLogEntry: LogEntry, rowIdx: Int) = {
+    val curSpans = spanStore.get(newLogEntry.id.timestamp).toSet
+    val fromTime = logTableView.items.value(math.max(0, rowIdx - 30)).logEntry.id.timestamp
+    val toTime = logTableView.items.value(math.min(logTableView.items.value.size - 1, rowIdx + 30)).logEntry.id.timestamp
+    val spansToShow = spanStore.get(fromTime, toTime)
+                      .map(s => s.name -> curSpans.contains(s))
+    spansToShow
   }
 
   val spanImageCreator = new SpanImageCreator
@@ -327,6 +366,17 @@ class LogTableController(logTableView: TableView[LogRow],
 
             s"Multi selection: ${items.size} rows, range span: $min - $max ($diff)\n\n${entry.rawMessage}"
           }
+
+        val spansToShow: Seq[(String, Boolean)] = getSpansForEntry(entry, selectionModel.getSelectedIndex)
+
+//        spanImageCreator.drawSpans(spansToShow, entry.requestId)
+
+        val curSpans = spanStore.get(entry.id.timestamp)
+        val curSpans2 = spanStore.spans.filter(s => s.contains(entry.id.timestamp))
+        val spansStr = curSpans.map(s => s"${s.category}: ${s.name} ${s.begin}-${s.end}")
+            .foldLeft("")(_ + "\n" + _)
+
+        pendingSpansTextArea.text = s"${curSpans.size} spans:\n\n(${spansToShow.size}): $spansToShow\n\n$spansStr"
       }
     }
   }
@@ -343,6 +393,7 @@ class LogTableController(logTableView: TableView[LogRow],
 
       dialog.showAndWait() match {
         case Some((source, offset: Long)) =>
+          // TODO: refactor this, use common parser/log store processor
           measure(s"Applying time shift of ${offset}ms to all logs frem $source") { () =>
             logStore.entriesIterator
             .filter(e => e.id.source.name == source)
@@ -357,6 +408,10 @@ class LogTableController(logTableView: TableView[LogRow],
           setNewLogStore(
             measure("Building and sorting log store") { () =>
               builder.build()
+            },
+            measure("Building span store") { () =>
+              new SpanParser(new RequestIdMarkerMatcher) // TODO: use already configured spanParser (during loading e.g. in LogParserMgr)
+                .buildSpanStore(logStore.entriesIterator.toSeq)
             }
           )
         case _ =>
@@ -387,7 +442,7 @@ class LogTableController(logTableView: TableView[LogRow],
       if (foundIdx >= 0) {
         logTableView.selectionModel.value.clearAndSelect(foundIdx)
         logTableView.selectionModel.value.focus(foundIdx)
-        logTableView.scrollTo(foundIdx)
+        logTableView.scrollTo(math.max(0, foundIdx - 5))
         statusRightLabel.text = ""
         // TODO: select/hightlight found text in table and raw message panel
       } else Platform.runLater {
@@ -522,19 +577,20 @@ class LogTableController(logTableView: TableView[LogRow],
 
   @Subscribe
   def onLogOpened(request: SetNewLogEntries): Unit = {
-    setNewLogStore(request.logStore)
+    setNewLogStore(request.logStore, request.spanStore)
   }
 
-  private def setNewLogStore(newLogStore: LogStore) {
-    logger.debug(s"New log requset received, ${newLogStore.size} entries")
+  private def setNewLogStore(newLogStore: LogStore, newSpanStore: SpanStore) {
+    logger.debug(s"New log requset received, ${newLogStore.size} entries, and ${newSpanStore.size} spans")
 
     measure("Setting table rows") { () =>
-      initLogRows(newLogStore, currentPredicate)
+      initLogRows(newLogStore, newSpanStore, currentPredicate)
     }
   }
 
-  private def initLogRows(logStore: LogStore, predicate: Option[FilterPredicate]): Unit = {
+  private def initLogRows(logStore: LogStore, spanStore: SpanStore, predicate: Option[FilterPredicate]): Unit = {
     this.logStore = logStore
+    this.spanStore = spanStore
 
     val logRowList = new MappedIndexedObservableList[LogRow, LogEntry](logStore,
       (index, entry) => new LogRow(index, entry, resourceMgr))

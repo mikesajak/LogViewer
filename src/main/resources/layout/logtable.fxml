@@ -110,8 +110,8 @@
               <columns>
                   <TableColumn fx:id="idColumn" editable="false" prefWidth="59.0" sortable="false" text="Id" />
                   <TableColumn fx:id="sourceColumn" editable="false" sortable="false" text="Source" />
-                <TableColumn fx:id="fileColumn" editable="false" prefWidth="150.0" sortable="false" text="File" />
-                <TableColumn fx:id="timestampColumn" editable="false" prefWidth="140.0" sortable="false" text="Timestamp" />
+                <TableColumn fx:id="fileColumn" editable="false" prefWidth="170.0" sortable="false" text="File" />
+                <TableColumn fx:id="timestampColumn" editable="false" prefWidth="160.0" sortable="false" text="Timestamp" />
                   <TableColumn fx:id="levelColumn" editable="false" minWidth="0.0" sortable="false" text="Level" />
                   <TableColumn fx:id="threadColumn" editable="false" prefWidth="250.0" sortable="false" text="Thread" />
                   <TableColumn fx:id="sessionColumn" editable="false" minWidth="0.0" prefWidth="110.0" sortable="false" text="Session" />
@@ -130,23 +130,32 @@
             </HBox>
          </children>
       </VBox>
-      <TitledPane maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" text="Selected log entry contents">
-         <content>
-            <VBox fx:id="selEntryVBox">
-               <children>
-                  <BreadCrumbBar fx:id="selectedEntryBreadCrumbBar" autoNavigationEnabled="false" maxHeight="-Infinity" maxWidth="1.7976931348623157E308" minHeight="16.0" minWidth="100.0" VBox.vgrow="NEVER" />
-                  <TextArea fx:id="selectedEntryTextArea" editable="false" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" styleClass="message-details-text-area" wrapText="true" VBox.vgrow="ALWAYS" />
-               </children>
-            </VBox>
-         </content>
-         <graphic>
-            <ImageView pickOnBounds="true" preserveRatio="true">
-               <image>
-                  <Image url="@../images/icons8-note-16.png" />
-               </image>
-            </ImageView>
-         </graphic>
-      </TitledPane>
+      <VBox>
+         <children>
+            <TitledPane maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" text="Selected log entry contents">
+               <content>
+                  <VBox fx:id="selEntryVBox">
+                     <children>
+                        <BreadCrumbBar fx:id="selectedEntryBreadCrumbBar" autoNavigationEnabled="false" maxHeight="-Infinity" maxWidth="1.7976931348623157E308" minHeight="16.0" minWidth="100.0" VBox.vgrow="NEVER" />
+                        <TextArea fx:id="selectedEntryTextArea" editable="false" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" styleClass="message-details-text-area" wrapText="true" VBox.vgrow="ALWAYS" />
+                     </children>
+                  </VBox>
+               </content>
+               <graphic>
+                  <ImageView pickOnBounds="true" preserveRatio="true">
+                     <image>
+                        <Image url="@../images/icons8-note-16.png" />
+                     </image>
+                  </ImageView>
+               </graphic>
+            </TitledPane>
+            <TitledPane animated="false" text="Pending spans">
+               <content>
+                  <TextArea fx:id="pendingSpansTextArea" editable="false" wrapText="true" />
+               </content>
+            </TitledPane>
+         </children>
+      </VBox>
    </items>
    <padding>
       <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />
