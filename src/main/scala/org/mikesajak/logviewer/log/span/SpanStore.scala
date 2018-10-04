@@ -2,16 +2,16 @@ package org.mikesajak.logviewer.log.span
 
 import com.google.common.collect
 import com.google.common.collect.TreeRangeMap
-import org.mikesajak.logviewer.log.{LogId, Timestamp}
+import org.mikesajak.logviewer.log.{LogId, LogStore, Timestamp}
 
 import scala.collection.immutable.TreeMap
 import scala.collection.mutable
 
 object SpanStore {
-  def empty = new SpanStore()
+  def empty = new SpanStore(null)
 }
 
-class SpanStore {
+class SpanStore(logStore: LogStore) {
   private val spanMap = TreeRangeMap.create[Timestamp, Span]()
   private var spansSeq = IndexedSeq[Span]()
 
@@ -35,7 +35,7 @@ class SpanStore {
     for (span <- spans)
       addSpan(span)
 
-  private def addSpan(span: Span) = {
+  private def addSpan(span: Span): Unit = {
     spanMap.put(collect.Range.closed(span.begin, span.end), span)
 
     val spansForBegin = spanStartMap.getOrElse(span.begin, List())
@@ -54,13 +54,16 @@ class SpanStore {
 
     spanIndex(s"${span.category}:${span.name}") = span
 
-    span.logIds.foreach { logId =>
+    val spanLogEntries = logStore.range(span.begin, span.end)
+//    span.logIds
+    spanLogEntries.map(_.id).foreach { logId =>
       val spansForId = logIdIndex.getOrElse(logId, Seq())
-      logIdIndex.put(logId, spansForId :+ span)
+      logIdIndex(logId) = spansForId :+ span
     }
   }
 
   def get(category: String, name: String) = spanIndex(s"$category:$name")
+  def get(spanId: String) = spanIndex(spanId)
 
 //  def get(timestamp: Timestamp): Option[Span] = Option(spanMap.get(timestamp))
   def get(timestamp: Timestamp) = {

@@ -368,6 +368,7 @@ class NitriteCollLogStore(dbFileName: String) extends NitriteLogStoreBase(dbFile
 
   override def indexes: Indexes = ImmutableIndexes.empty // tmp mock
   override def entriesIterator: Iterator[LogEntry] = Iterator.empty // tmp mock
+  override def range(start: Timestamp, end: Timestamp): IndexedSeq[LogEntry] = ???
 }
 
 //class BufferedNitriteCollLogStore(logStore: LogStore, bufferSize: Int = 100) extends ObservableListBase[LogEntry] with LogStore {
@@ -413,6 +414,7 @@ class NitriteRepoLogStore(dbFileName: String) extends NitriteLogStoreBase(dbFile
 
   override def indexes: Indexes = ImmutableIndexes.empty // tmp mock
   override def entriesIterator: Iterator[LogEntry] = Iterator.empty // tmp mock
+  override def range(start: Timestamp, end: Timestamp): IndexedSeq[LogEntry] = ???
 }
 
 class NitriteWrappedLogStore(dbFileName: String) extends NitriteLogStoreBase(dbFileName) {
@@ -429,4 +431,5 @@ class NitriteWrappedLogStore(dbFileName: String) extends NitriteLogStoreBase(dbF
 
   override def indexes: Indexes = ImmutableIndexes.empty // tmp mock
   override def entriesIterator: Iterator[LogEntry] = Iterator.empty // tmp mock
+  override def range(start: Timestamp, end: Timestamp): IndexedSeq[LogEntry] = ???
 }

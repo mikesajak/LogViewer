@@ -41,7 +41,7 @@ class LogParserMgr(eventBus: EventBus, globalState: GlobalState) {
 
       val spanStore = measure("Parsing spans and building span store") { () =>
         val spanParser = new SpanParser(new RequestIdMarkerMatcher) // TODO: configurable/pluggable matchers etc.
-        spanParser.buildSpanStore(logStore.entriesIterator.toSeq)
+        spanParser.buildSpanStore(logStore)
       }
 
       logger.info(s"Created new log store with ${logStore.size} entries, and span store with ${spanStore.size} spans.")
@@ -71,7 +71,7 @@ class LogParserMgr(eventBus: EventBus, globalState: GlobalState) {
 
       val spanStore = measure("Parsing spans and building span store") { () =>
         val spanParser = new SpanParser(new RequestIdMarkerMatcher) // TODO: configurable/pluggable matchers etc.
-        spanParser.buildSpanStore(logStore.entriesIterator.toSeq)
+        spanParser.buildSpanStore(logStore)
       }
 
       globalState.currentLogStore = logStore

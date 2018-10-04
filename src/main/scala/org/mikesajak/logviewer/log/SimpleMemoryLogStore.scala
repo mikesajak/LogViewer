@@ -3,7 +3,9 @@ import java.time.LocalDateTime
 
 import com.typesafe.scalalogging.Logger
 import javafx.collections.ObservableListBase
+import org.mikesajak.logviewer.util.SearchingEx
 
+import scala.collection.Searching.{Found, InsertionPoint}
 import scala.collection.immutable.TreeSet
 import scala.collection.mutable
 import scala.math.Ordering
@@ -29,19 +31,19 @@ class ImmutableMemoryLogStore(entryStore: IndexedSeq[LogEntry], override val ind
 
   override def entriesIterator: Iterator[LogEntry] = entries.iterator
 
-//  override def range(start: LocalDateTime, end: LocalDateTime): IndexedSeq[LogEntry] = {
-//    val startIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, start) match {
-//      case Found(foundIndex) => foundIndex
-//      case InsertionPoint(insertionPoint) => insertionPoint
-//    }
-//
-//    val endIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, end) match {
-//      case Found(foundIndex) => foundIndex
-//      case InsertionPoint(insertionPoint) => insertionPoint
-//    }
-//
-//    entryStore.slice(startIdx, endIdx)
-//  }
+  override def range(start: Timestamp, end: Timestamp): IndexedSeq[LogEntry] = {
+    val startIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, start) match {
+      case Found(foundIndex) => foundIndex
+      case InsertionPoint(insertionPoint) => insertionPoint
+    }
+
+    val endIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, end) match {
+      case Found(foundIndex) => foundIndex
+      case InsertionPoint(insertionPoint) => insertionPoint
+    }
+
+    entryStore.slice(startIdx, endIdx + 1)
+  }
 //
 //  override def logStoreForRange(start: LocalDateTime, end: LocalDateTime): LogStore = {
 //    val startIdx = SearchingEx.binarySearch(entryStore, (e: LogEntry) => e.id.timestamp, start) match {

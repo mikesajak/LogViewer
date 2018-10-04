@@ -27,7 +27,7 @@ trait LogStore extends ObservableList[LogEntry] {
   def nonEmpty: Boolean = !isEmpty
   def first: LogEntry
   def last: LogEntry
-//  def range(start: LocalDateTime, end: LocalDateTime): IndexedSeq[LogEntry]
+  def range(start: Timestamp, end: Timestamp): IndexedSeq[LogEntry]
 //  def logStoreForRange(start: LocalDateTime, end: LocalDateTime): LogStore
 
   def entriesIterator: Iterator[LogEntry]

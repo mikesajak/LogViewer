@@ -12,7 +12,7 @@ import org.controlsfx.control.textfield.{AutoCompletionBinding, CustomTextField,
 import org.controlsfx.control.{BreadCrumbBar, PopOver, SegmentedButton}
 import org.mikesajak.logviewer.AppController
 import org.mikesajak.logviewer.log._
-import org.mikesajak.logviewer.log.span.{RequestIdMarkerMatcher, SpanParser, SpanStore}
+import org.mikesajak.logviewer.log.span.{RequestIdMarkerMatcher, Span, SpanParser, SpanStore}
 import org.mikesajak.logviewer.ui.FilterExpressionParser.FilterPredicate
 import org.mikesajak.logviewer.ui._
 import org.mikesajak.logviewer.util.Measure.measure
@@ -30,6 +30,7 @@ import scalafx.scene.layout.{HBox, Priority, VBox}
 import scalafxml.core.macros.sfxml
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.util.matching.Regex
 import scala.util.{Failure, Success}
 
@@ -103,6 +104,7 @@ class LogTableController(logTableView: TableView[LogRow],
 
   private var logStore: LogStore = ImmutableMemoryLogStore.empty
   private var spanStore: SpanStore = SpanStore.empty
+  private var spanSlots: IndexedSeq[SpanRow] = IndexedSeq.empty
 
   private val logLevelStyleClassMap = Map[LogLevel, String](
     LogLevel.Error   -> "error",
@@ -182,8 +184,8 @@ class LogTableController(logTableView: TableView[LogRow],
         item.onChange { (_, _, newLogEntry) =>
           text = "x"//if (newLogEntry != null) newLogEntry.toString else ""
           graphic = if (newLogEntry != null) {
-            val spansToShow: Seq[(String, Boolean)] = getSpansForEntry(newLogEntry, tableRow.value.getIndex)
-            spanImageCreator.drawSpans(spansToShow, newLogEntry.requestId)
+            val curSlot = spanSlots(tableRow.value.getIndex)
+            spanImageCreator.drawSpans2(curSlot.slots, s"RequestId:${newLogEntry.requestId}", newLogEntry.id)
           } else null
         }
       }
@@ -195,15 +197,10 @@ class LogTableController(logTableView: TableView[LogRow],
         item.onChange { (_,_, newValue) =>
           text = newValue
           graphic = if (newValue != null) {
-            val span = spanStore.get("RequestId", newValue)
+            val spanId = s"RequestId:$newValue"
+            val span = spanStore.get(spanId)
             val row = tableRow.value.item.value.asInstanceOf[LogRow]
-
-            if (span.logIds.head == row.logEntry.id)           spanImageCreator.getBeginSpanIcon(newValue, 16)
-            else if (span.logIds.last == row.logEntry.id)      spanImageCreator.getEndSpanIcon(newValue, 16)
-            else if (span.logIds.size == 1)                    spanImageCreator.getOneElementSpanIcon(newValue, 16)
-            else if (span.contains(row.logEntry.id.timestamp)) spanImageCreator.getMiddleSpanIcon(newValue, 16)
-            else null
-
+            spanImageCreator.getSpanIcon(span, row.logEntry.id)
           } else null
           //          style = s"-fx-background-color: #${sourceColors.getOrElse(newValue, "ffffff")};"
           //          this.pseudoClassStateChanged()
@@ -367,16 +364,12 @@ class LogTableController(logTableView: TableView[LogRow],
             s"Multi selection: ${items.size} rows, range span: $min - $max ($diff)\n\n${entry.rawMessage}"
           }
 
-        val spansToShow: Seq[(String, Boolean)] = getSpansForEntry(entry, selectionModel.getSelectedIndex)
+        val spans = spanStore.get(entry.id)
 
-//        spanImageCreator.drawSpans(spansToShow, entry.requestId)
-
-        val curSpans = spanStore.get(entry.id.timestamp)
-        val curSpans2 = spanStore.spans.filter(s => s.contains(entry.id.timestamp))
-        val spansStr = curSpans.map(s => s"${s.category}: ${s.name} ${s.begin}-${s.end}")
+        val spansStr = spans.map(s => s"${s.category}: ${s.name} ${s.begin}-${s.end}")
             .foldLeft("")(_ + "\n" + _)
 
-        pendingSpansTextArea.text = s"${curSpans.size} spans:\n\n(${spansToShow.size}): $spansToShow\n\n$spansStr"
+        pendingSpansTextArea.text = s"Spans(${spans.size}):\n$spansStr"
       }
     }
   }
@@ -411,7 +404,7 @@ class LogTableController(logTableView: TableView[LogRow],
             },
             measure("Building span store") { () =>
               new SpanParser(new RequestIdMarkerMatcher) // TODO: use already configured spanParser (during loading e.g. in LogParserMgr)
-                .buildSpanStore(logStore.entriesIterator.toSeq)
+                .buildSpanStore(logStore)
             }
           )
         case _ =>
@@ -595,19 +588,20 @@ class LogTableController(logTableView: TableView[LogRow],
     val logRowList = new MappedIndexedObservableList[LogRow, LogEntry](logStore,
       (index, entry) => new LogRow(index, entry, resourceMgr))
     tableRows = new CachedObservableList(logRowList)
+
     setFilterPredicate(predicate)
   }
 
-  private def setFilterPredicate(predicateOption: Option[FilterPredicate]): Unit = {
+  private def setFilterPredicate(predicateOption: Option[FilterPredicate]) = {
+    val filteredItems = predicateOption.map { predicate =>
+      measure("Preparing filtered view") { () =>
+        new FilteredObservableList[LogRow](tableRows, predicate)
+      }
+    }.getOrElse(tableRows)
 
-    val visibleItemsList =
-      predicateOption.map { predicate =>
-        measure("Preparing filtered view") { () =>
-          new FilteredObservableList[LogRow](tableRows, predicate)
-        }
-      }.getOrElse(tableRows)
+    this.spanSlots = measure("Calculating span slots") { () => parseSpanSlots(filteredItems) }
 
-    logTableView.items = visibleItemsList
+    logTableView.items = filteredItems
     updateStatus()
   }
 
@@ -622,5 +616,44 @@ class LogTableController(logTableView: TableView[LogRow],
         }
     }
   }
+
+  private def parseSpanSlots(logRows: Seq[LogRow]): IndexedSeq[SpanRow] = {
+    val slots = logRows.foldLeft(mutable.Buffer(SpanRow(IndexedSeq(), Map()))) { (curList, row) =>
+      val spanRow = getCurRow(curList.last, spanStore.get(row.logEntry.id))
+      curList += spanRow
+    }
+
+    slots.drop(1).toIndexedSeq // TODO: try to avoid copying...
+  }
+
+  private def getCurRow(prevRow: SpanRow, spans: Seq[Span]): SpanRow = {
+    val curSlots = mutable.IndexedSeq.tabulate(prevRow.slots.size) { i =>
+      val curSlot = prevRow.slots(i)
+      if (spans.contains(curSlot)) curSlot
+      else null
+    }
+
+    val remainingSpans = spans.filter(s => !curSlots.contains(s))
+    remainingSpans.foreach { s =>
+      curSlots.indexWhere(s => s == null) match {
+        case idx if idx >= 0 => curSlots(idx) = s
+        case _ =>
+      }
+    }
+
+    val lastRemainingSlots = spans.filter(s => !curSlots.contains(s))
+
+    val resultSlots = curSlots ++ lastRemainingSlots
+
+    val lastFilledIdx = resultSlots.lastIndexWhere(s => s != null)
+    val strippedSlots =
+      if (lastFilledIdx >= 0 && lastFilledIdx < resultSlots.size - 1)
+        resultSlots.take(lastFilledIdx + 1)
+      else resultSlots
+
+    SpanRow(strippedSlots, strippedSlots.zipWithIndex.toMap)
+  }
+
+  case class SpanRow(slots: IndexedSeq[Span], slotsMap: Map[Span, Int])
 
 }

@@ -1,6 +1,6 @@
 package org.mikesajak.logviewer.log.span
 
-import org.mikesajak.logviewer.log.{LogEntry, LogId, Timestamp}
+import org.mikesajak.logviewer.log.{LogEntry, LogId, LogStore, Timestamp}
 
 import scala.collection.mutable
 
@@ -39,10 +39,10 @@ class UserIdMarkerMatcher extends SimpleOccurrenceMarkerMatcher("UserId", logEnt
 
 class SpanParser(markerMatchers: MarkerMatcher*) {
 
-  def buildSpanStore(entries: Seq[LogEntry]): SpanStore = {
-    val markersMap = processMarkers(entries)
+  def buildSpanStore(logStore: LogStore): SpanStore = {
+    val markersMap = processMarkers(logStore.entriesIterator.toSeq)
     val spans = processSpans(markersMap)
-    val spanStore = new SpanStore
+    val spanStore = new SpanStore(logStore)
     spanStore.addAll(spans)
     spanStore
   }
@@ -53,8 +53,7 @@ class SpanParser(markerMatchers: MarkerMatcher*) {
     entries.flatMap(entry => markerMatchers.flatMap(matcher => matcher.matchMarker(entry).map(m => entry -> m)))
       .foreach { case (entry, marker) =>
         val markersForCategory = markerMap.getOrElse(marker.category, List())
-        markerMap += marker.category -> (marker :: markersForCategory)
-        //        entryMarkerMap.addBinding(entry, marker)
+        markerMap(marker.category) = marker :: markersForCategory
       }
     markerMap.toMap
   }

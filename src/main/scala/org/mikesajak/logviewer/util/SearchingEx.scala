@@ -10,14 +10,18 @@ object SearchingEx {
 
   private def binarySearch[A, B](data: IndexedSeq[A], mapper: A => B, searchValue: B,
                                                startIdx: Int, endIdx: Int)(implicit ord: Ordering[B]): SearchResult = {
-    if (ord.eq(startIdx, endIdx)) {
+    if (startIdx == endIdx || startIdx == endIdx - 1) {
       if (mapper(data(startIdx)) == searchValue) Found(startIdx)
       else InsertionPoint(startIdx)
     } else {
       val midIdx = startIdx + (endIdx - startIdx) / 2
 
-      if (ord.lteq(mapper(data(midIdx)), searchValue)) binarySearch(data, mapper, searchValue, startIdx, midIdx)
-      else binarySearch(data, mapper, searchValue, midIdx, endIdx)
+      val entryValue = mapper(data(midIdx))
+      ord.compare(entryValue, searchValue) match {
+        case 0 =>          Found(midIdx)
+        case d if d > 0 => binarySearch(data, mapper, searchValue, startIdx, midIdx)
+        case _ =>          binarySearch(data, mapper, searchValue, midIdx, endIdx)
+      }
     }
   }
 }

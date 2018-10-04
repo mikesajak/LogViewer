@@ -1,5 +1,7 @@
 package org.mikesajak.logviewer.ui
 
+import org.mikesajak.logviewer.log.LogId
+import org.mikesajak.logviewer.log.span.Span
 import scalafx.scene.canvas.{Canvas, GraphicsContext}
 import scalafx.scene.paint.Color
 
@@ -26,6 +28,27 @@ class SpanImageCreator {
 
       if (spanId == curSpanId)
         gc.fillRect(spanPos - spanBubbleSize/2, spanHeight/2 - spanBubbleSize/2,
+                    spanBubbleSize, spanBubbleSize)
+    }
+
+    canvas
+  }
+
+  def drawSpans2(spans: Seq[Span], curSpanId: String, curEntryid: LogId): Canvas = {
+    val canvas = new Canvas(spans.size * spanWidth, spanHeight)
+    val gc = canvas.graphicsContext2D
+    gc.lineWidth = spanLineWidth
+
+    for ((span, pos) <- spans.zipWithIndex; if span != null) {
+      val spanColor = getColor(span.id)
+      gc.stroke = spanColor
+      gc.fill = spanColor
+      val spanPos = pos * spanWidth
+      val spanCenter = spanPos + spanWidth /2 - spanLineWidth /2
+      gc.strokeLine(spanCenter, 0, spanCenter, canvas.height.value)
+
+      if (span.id == curSpanId)
+        gc.fillRect(spanCenter - spanBubbleSize/2, spanHeight/2 - spanBubbleSize/2,
                     spanBubbleSize, spanBubbleSize)
     }
 
@@ -59,39 +82,84 @@ class SpanImageCreator {
     canvas
   }
 
+  def getSpanIcon(span: Span, id: LogId): Canvas = {
+    val spanId = span.id
+    if (span.logIds.size == 1)            getOneElementSpanIcon(spanId, 16)
+    else if (span.logIds.head == id)      getBeginSpanIcon(spanId, 16)
+    else if (span.logIds.last == id)      getEndSpanIcon(spanId, 16)
+    else if (span.contains(id.timestamp)) getMiddleSpanIcon(spanId, 16)
+    else null
+  }
+
+  def drawSpanIcon(span: Span, id: LogId, size: Double, gc: GraphicsContext): Unit = {
+    val spanId = span.id
+    if (span.logIds.size == 1)            drawOneElementSpanIcon(spanId, size, gc)
+    else if (span.logIds.head == id)      drawBeginSpanIcon(spanId, size, gc)
+    else if (span.logIds.last == id)      drawEndSpanIcon(spanId, size, gc)
+    else if (span.contains(id.timestamp)) drawMiddleSpanIcon(spanId, size, gc)
+  }
+
+  private def drawSpanLineIcon(id: String, size: Double, gc: GraphicsContext): Unit = {
+    val color = getColor(id)
+    drawSpanLine(gc, color, size)
+  }
+
   def getBeginSpanIcon(id: String, size: Int): Canvas = {
     val canvas = new Canvas(size, size)
     val gc = canvas.graphicsContext2D
+    drawBeginSpanIcon(id, size, gc)
+    canvas
+  }
+
+  private def drawBeginSpanIcon(id: String, size: Double, gc: GraphicsContext): Unit = {
     val color = getColor(id)
     drawBubble(gc, color, spanBubbleSize, size)
     drawBeginLine(gc, color, size)
+  }
+
+  def getMiddleSpanIcon(id: String, size: Double): Canvas = {
+    val canvas = new Canvas(size, size)
+    val gc = canvas.graphicsContext2D
+    drawMiddleSpanIcon(id, size, gc)
     canvas
   }
 
-  def getMiddleSpanIcon(id: String, size: Int): Canvas = {
-    val canvas = new Canvas(size, size)
-    val gc = canvas.graphicsContext2D
+  private def drawMiddleSpanIcon(id: String, size: Double, gc: GraphicsContext): Unit = {
     val color = getColor(id)
     drawBubble(gc, color, spanBubbleSize, size)
     drawMiddleLine(gc, color, size)
+  }
+
+  def getEndSpanIcon(id: String, size: Double): Canvas = {
+    val canvas = new Canvas(size, size)
+    val gc = canvas.graphicsContext2D
+    drawEndSpanIcon(id, size, gc)
     canvas
   }
 
-  def getEndSpanIcon(id: String, size: Int): Canvas = {
-    val canvas = new Canvas(size, size)
-    val gc = canvas.graphicsContext2D
+  private def drawEndSpanIcon(id: String, size: Double, gc: GraphicsContext): Unit = {
     val color = getColor(id)
     drawBubble(gc, color, spanBubbleSize, size)
     drawEndLine(gc, color, size)
+  }
+
+  def getOneElementSpanIcon(id: String, size: Double): Canvas = {
+    val canvas = new Canvas(size, size)
+    val gc = canvas.graphicsContext2D
+    drawOneElementSpanIcon(id, size, gc)
     canvas
   }
 
-  def getOneElementSpanIcon(id: String, size: Int): Canvas = {
-    val canvas = new Canvas(size, size)
-    val gc = canvas.graphicsContext2D
+  private def drawOneElementSpanIcon(id: String, size: Double, gc: GraphicsContext): Unit = {
     val color = getColor(id)
     drawBubble(gc, color, spanBubbleSize, size)
-    canvas
+  }
+
+  private def drawSpanLine(gc: GraphicsContext, color: Color, size: Double): Unit = {
+    gc.stroke = color
+    gc.lineWidth = spanLineWidth
+    val center = size / 2
+    gc.strokeLine(center, 0, center, size)
   }
 
   private def drawBubble(gc: GraphicsContext, color: Color, size: Double, totalSize: Double): Unit = {

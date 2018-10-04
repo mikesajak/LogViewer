@@ -18,6 +18,8 @@ object Main extends JFXApp {
   private val logger = Logger("Main")
   private val mainPanelDef: String = "/layout/main-panel.fxml"
 
+  private val FadeTime = 400
+
   logger.info(s"LogViewer starting")
 
   private val injector = AppContext.globalInjector.createChildInjector()
@@ -44,7 +46,7 @@ object Main extends JFXApp {
     we.consume()
     appController.exitApplication { () =>
       new Timeline {
-        keyFrames.add(KeyFrame(Duration(800), "fadeOut", null, Set(KeyValue(stage.opacity, 0))))
+        keyFrames.add(KeyFrame(Duration(FadeTime), "fadeOut", null, Set(KeyValue(stage.opacity, 0))))
         onFinished = () => Platform.exit
       }.play()
       true
@@ -59,7 +61,7 @@ object Main extends JFXApp {
   stage.show()
 
   new Timeline {
-    keyFrames.add(KeyFrame(Duration(800), "fadeIn", null, Set(KeyValue(stage.opacity, 1))))
+    keyFrames.add(KeyFrame(Duration(FadeTime), "fadeIn", null, Set(KeyValue(stage.opacity, 1))))
   }.play()
 
 
