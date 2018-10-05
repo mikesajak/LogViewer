@@ -200,7 +200,8 @@ class LogTableController(logTableView: TableView[LogRow],
             val spanId = s"RequestId:$newValue"
             val span = spanStore.get(spanId)
             val row = tableRow.value.item.value.asInstanceOf[LogRow]
-            spanImageCreator.getSpanIcon(span, row.logEntry.id)
+            if (row != null) spanImageCreator.getSpanIcon(span, row.logEntry.id)
+            else null
           } else null
           //          style = s"-fx-background-color: #${sourceColors.getOrElse(newValue, "ffffff")};"
           //          this.pseudoClassStateChanged()
@@ -592,7 +593,7 @@ class LogTableController(logTableView: TableView[LogRow],
     setFilterPredicate(predicate)
   }
 
-  private def setFilterPredicate(predicateOption: Option[FilterPredicate]) = {
+  private def setFilterPredicate(predicateOption: Option[FilterPredicate]): Unit = {
     val filteredItems = predicateOption.map { predicate =>
       measure("Preparing filtered view") { () =>
         new FilteredObservableList[LogRow](tableRows, predicate)

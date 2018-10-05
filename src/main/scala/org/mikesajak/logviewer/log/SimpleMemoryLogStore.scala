@@ -42,7 +42,17 @@ class ImmutableMemoryLogStore(entryStore: IndexedSeq[LogEntry], override val ind
       case InsertionPoint(insertionPoint) => insertionPoint
     }
 
-    entryStore.slice(startIdx, endIdx + 1)
+    def findFirstMatching(idx: Int, tm: Timestamp): Int =
+      if (idx == 0) idx
+      else if (entryStore(idx).id.timestamp == tm) findFirstMatching(idx - 1, tm)
+      else idx + 1
+
+    def findLastMatching(idx: Int, tm: Timestamp): Int =
+      if (idx == entryStore.size - 1) idx
+      else if (entryStore(idx).id.timestamp == tm) findLastMatching(idx + 1, tm)
+      else idx - 1
+
+    entryStore.slice(findFirstMatching(startIdx, start), findLastMatching(endIdx, end) + 1)
   }
 //
 //  override def logStoreForRange(start: LocalDateTime, end: LocalDateTime): LogStore = {

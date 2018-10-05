@@ -48,32 +48,16 @@ class SpanImageCreator {
       gc.strokeLine(spanCenter, 0, spanCenter, canvas.height.value)
 
       if (span.id == curSpanId)
-        gc.fillRect(spanCenter - spanBubbleSize/2, spanHeight/2 - spanBubbleSize/2,
-                    spanBubbleSize, spanBubbleSize)
+//        gc.fillRect(spanCenter - spanBubbleSize/2, spanHeight/2 - spanBubbleSize/2,
+//                    spanBubbleSize, spanBubbleSize)
+        drawSpanIcon(span, curEntryid, spanPos, spanWidth, gc)
+      else
+        drawSpanLineIcon(span.id, spanPos, spanWidth, gc)
     }
 
     canvas
   }
   
-  def drawSpans(numAllSpans: Int, spanPositions: Seq[Int]): Canvas = {
-    val canvas = new Canvas(numAllSpans * spanWidth, spanHeight)
-    val gc = canvas.graphicsContext2D
-
-//    gc.fill = Color.Transparent
-//    gc.fillRect(0, 0, canvas.width.value, canvas.height.value)
-
-    gc.lineWidth = spanLineWidth
-    for (spanPos <- spanPositions) {
-      val spanColor = colorGenerator.getColor(spanPos + 10)
-      gc.stroke = spanColor
-      gc.fill = spanColor
-      val spanImagePos = spanPos * spanWidth + spanLineWidth/2
-      gc.strokeLine(spanImagePos, 0, spanImagePos, canvas.height.value)
-    }
-
-    canvas
-  }
-
   def getColorBoxFor(id: String, size: Int): Canvas = {
     val canvas = new Canvas(size, size)
     val gc = canvas.graphicsContext2D
@@ -91,101 +75,101 @@ class SpanImageCreator {
     else null
   }
 
-  def drawSpanIcon(span: Span, id: LogId, size: Double, gc: GraphicsContext): Unit = {
+  def drawSpanIcon(span: Span, id: LogId, posX: Double, size: Double, gc: GraphicsContext): Unit = {
     val spanId = span.id
-    if (span.logIds.size == 1)            drawOneElementSpanIcon(spanId, size, gc)
-    else if (span.logIds.head == id)      drawBeginSpanIcon(spanId, size, gc)
-    else if (span.logIds.last == id)      drawEndSpanIcon(spanId, size, gc)
-    else if (span.contains(id.timestamp)) drawMiddleSpanIcon(spanId, size, gc)
+    if (span.logIds.size == 1)            drawOneElementSpanIcon(spanId, posX, size, gc)
+    else if (span.logIds.head == id)      drawBeginSpanIcon(spanId, posX, size, gc)
+    else if (span.logIds.last == id)      drawEndSpanIcon(spanId, posX, size, gc)
+    else if (span.contains(id.timestamp)) drawMiddleSpanIcon(spanId, posX, size, gc)
   }
 
-  private def drawSpanLineIcon(id: String, size: Double, gc: GraphicsContext): Unit = {
+  private def drawSpanLineIcon(id: String, posX: Double, size: Double, gc: GraphicsContext): Unit = {
     val color = getColor(id)
-    drawSpanLine(gc, color, size)
+    drawSpanLine(gc, color, posX, size)
   }
 
-  def getBeginSpanIcon(id: String, size: Int): Canvas = {
+  def getBeginSpanIcon(id: String, size: Double): Canvas = {
     val canvas = new Canvas(size, size)
     val gc = canvas.graphicsContext2D
-    drawBeginSpanIcon(id, size, gc)
+    drawBeginSpanIcon(id, 0, size, gc)
     canvas
   }
 
-  private def drawBeginSpanIcon(id: String, size: Double, gc: GraphicsContext): Unit = {
+  private def drawBeginSpanIcon(id: String, posX: Double, size: Double, gc: GraphicsContext): Unit = {
     val color = getColor(id)
-    drawBubble(gc, color, spanBubbleSize, size)
-    drawBeginLine(gc, color, size)
+    drawBubble(gc, color, posX, spanBubbleSize, size)
+    drawBeginLine(gc, color, posX, size)
   }
 
   def getMiddleSpanIcon(id: String, size: Double): Canvas = {
     val canvas = new Canvas(size, size)
     val gc = canvas.graphicsContext2D
-    drawMiddleSpanIcon(id, size, gc)
+    drawMiddleSpanIcon(id, 0, size, gc)
     canvas
   }
 
-  private def drawMiddleSpanIcon(id: String, size: Double, gc: GraphicsContext): Unit = {
+  private def drawMiddleSpanIcon(id: String, posX: Double, size: Double, gc: GraphicsContext): Unit = {
     val color = getColor(id)
-    drawBubble(gc, color, spanBubbleSize, size)
-    drawMiddleLine(gc, color, size)
+    drawBubble(gc, color, posX, spanBubbleSize, size)
+    drawMiddleLine(gc, color, posX, size)
   }
 
   def getEndSpanIcon(id: String, size: Double): Canvas = {
     val canvas = new Canvas(size, size)
     val gc = canvas.graphicsContext2D
-    drawEndSpanIcon(id, size, gc)
+    drawEndSpanIcon(id, 0, size, gc)
     canvas
   }
 
-  private def drawEndSpanIcon(id: String, size: Double, gc: GraphicsContext): Unit = {
+  private def drawEndSpanIcon(id: String, posX: Double, size: Double, gc: GraphicsContext): Unit = {
     val color = getColor(id)
-    drawBubble(gc, color, spanBubbleSize, size)
-    drawEndLine(gc, color, size)
+    drawBubble(gc, color, posX, spanBubbleSize, size)
+    drawEndLine(gc, color, posX, size)
   }
 
   def getOneElementSpanIcon(id: String, size: Double): Canvas = {
     val canvas = new Canvas(size, size)
     val gc = canvas.graphicsContext2D
-    drawOneElementSpanIcon(id, size, gc)
+    drawOneElementSpanIcon(id, 0, size, gc)
     canvas
   }
 
-  private def drawOneElementSpanIcon(id: String, size: Double, gc: GraphicsContext): Unit = {
+  private def drawOneElementSpanIcon(id: String, posX: Double, size: Double, gc: GraphicsContext): Unit = {
     val color = getColor(id)
-    drawBubble(gc, color, spanBubbleSize, size)
+    drawBubble(gc, color, posX, spanBubbleSize, size)
   }
 
-  private def drawSpanLine(gc: GraphicsContext, color: Color, size: Double): Unit = {
+  private def drawSpanLine(gc: GraphicsContext, color: Color, posX: Double, size: Double): Unit = {
     gc.stroke = color
     gc.lineWidth = spanLineWidth
-    val center = size / 2
+    val center = posX + size / 2
     gc.strokeLine(center, 0, center, size)
   }
 
-  private def drawBubble(gc: GraphicsContext, color: Color, size: Double, totalSize: Double): Unit = {
+  private def drawBubble(gc: GraphicsContext, color: Color, posX: Double, size: Double, totalSize: Double): Unit = {
     gc.fill = color
     val center = totalSize / 2
-    gc.fillRect(center - size/2, center - size/2, size, size)
+    gc.fillRect(posX + center - size/2, center - size/2, size, size)
   }
 
-  private def drawBeginLine(gc: GraphicsContext, color: Color, size: Double): Unit = {
+  private def drawBeginLine(gc: GraphicsContext, color: Color, posX: Double, size: Double): Unit = {
     gc.stroke = color
     gc.lineWidth = spanLineWidth
     val center = size / 2
-    gc.strokeLine(center, center, center, size)
+    gc.strokeLine(posX + center, center, posX + center, size)
   }
 
-  private def drawEndLine(gc: GraphicsContext, color: Color, size: Double): Unit = {
+  private def drawEndLine(gc: GraphicsContext, color: Color, posX:Double, size: Double): Unit = {
     gc.stroke = color
     gc.lineWidth = spanLineWidth
     val center = size / 2
-    gc.strokeLine(center, 0, center, center)
+    gc.strokeLine(posX + center, 0, posX + center, center)
   }
 
-  private def drawMiddleLine(gc: GraphicsContext, color: Color, size: Double): Unit = {
+  private def drawMiddleLine(gc: GraphicsContext, color: Color, posX: Double, size: Double): Unit = {
     gc.stroke = color
     gc.lineWidth = spanLineWidth
-    val center = size / 2
+    val center = posX + size / 2
     gc.strokeLine(center, 0, center, size)
   }
 

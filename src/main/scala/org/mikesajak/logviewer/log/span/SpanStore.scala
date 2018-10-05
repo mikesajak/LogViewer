@@ -55,7 +55,6 @@ class SpanStore(logStore: LogStore) {
     spanIndex(s"${span.category}:${span.name}") = span
 
     val spanLogEntries = logStore.range(span.begin, span.end)
-//    span.logIds
     spanLogEntries.map(_.id).foreach { logId =>
       val spansForId = logIdIndex.getOrElse(logId, Seq())
       logIdIndex(logId) = spansForId :+ span
@@ -66,7 +65,7 @@ class SpanStore(logStore: LogStore) {
   def get(spanId: String) = spanIndex(spanId)
 
 //  def get(timestamp: Timestamp): Option[Span] = Option(spanMap.get(timestamp))
-  def get(timestamp: Timestamp) = {
+  def get(timestamp: Timestamp): Seq[Span] = {
 //    val startPointsAfter = spanStartMap.from(timestamp).keys
 //    val endPointsBefore = spanEndMap.to(timestamp).keys
     val rangeSpans = spanStartMap.range(timestamp.minus(longestSpan.duration), timestamp)
@@ -79,7 +78,7 @@ class SpanStore(logStore: LogStore) {
       .sortBy(_.begin)
   }
 
-  def get(from: Timestamp, to: Timestamp) = {
+  def get(from: Timestamp, to: Timestamp): Seq[Span] = {
     val rangeSpans = spanStartMap.range(from.minus(longestSpan.duration), to)
     val toSpans = spanStartMap.getOrElse(to, Seq.empty)
     (rangeSpans.view.flatMap(_._2) ++ toSpans)
