@@ -1,5 +1,5 @@
 
-# log table - levels
+/* log table - levels */
 .table-view .table-row-cell.error .text {
     -fx-fill: red;
 }
@@ -49,20 +49,26 @@
  -fx-font-size: 11px;
 }
 
-//Style of each entire row in the table view
+/*Style of each entire row in the table view*/
 .table-row-cell:selected {
    /* -fx-border-color:transparent firebrick transparent firebrick  ;
     -fx-border-width:2.0; */
 }
 
-//Style of each entire row in the table view when is hovered
+/*Style of each entire row in the table view when is hovered*/
 .table-row-cell:hover {
     /*-fx-background-color:light-blue; */
 }
 
-//Style of each entire row in the table view when is getting focused
+/*Style of each entire row in the table view when is getting focused*/
 .table-row-cell:focused {
     /*-fx-background-color:purple;*/
+}
+
+.table-view .table-cell:spanCell {
+  -fx-border-width: 0 0 0 0;
+  -fx-border-insets: 0 0 0 0;
+  -fx-padding: 0 0 0 0;
 }
 
 .combo-box .error {

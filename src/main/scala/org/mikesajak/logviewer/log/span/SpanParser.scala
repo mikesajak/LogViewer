@@ -1,6 +1,8 @@
 package org.mikesajak.logviewer.log.span
 
+import com.typesafe.scalalogging.Logger
 import org.mikesajak.logviewer.log.{LogEntry, LogId, LogStore, Timestamp}
+import org.mikesajak.logviewer.util.Measure.measure
 
 import scala.collection.mutable
 
@@ -38,13 +40,20 @@ class SessionIdMarkerMatcher extends SimpleOccurrenceMarkerMatcher("SessionId", 
 class UserIdMarkerMatcher extends SimpleOccurrenceMarkerMatcher("UserId", logEntry => Option(logEntry.userId))
 
 class SpanParser(markerMatchers: MarkerMatcher*) {
+  private implicit val logger: Logger = Logger[SpanParser]
 
   def buildSpanStore(logStore: LogStore): SpanStore = {
-    val markersMap = processMarkers(logStore.entriesIterator.toSeq)
-    val spans = processSpans(markersMap)
-    val spanStore = new SpanStore(logStore)
-    spanStore.addAll(spans)
-    spanStore
+    val markersMap = measure("Processing markers") { () =>
+      processMarkers(logStore.entriesIterator.toSeq)
+    }
+    val spans = measure("Processing spans") { () =>
+      processSpans(markersMap)
+    }
+    measure("Building span store") { () =>
+      val spanStore = new SpanStore(logStore)
+      spanStore.addAll(spans)
+      spanStore
+    }
   }
 
   def processMarkers(entries: Seq[LogEntry]): Map[String, List[Marker]] = {

@@ -182,12 +182,15 @@ class LogTableController(logTableView: TableView[LogRow],
     spansColumn.cellFactory = { tc: TableColumn[LogRow, LogEntry] =>
       new TableCell[LogRow, LogEntry]() { cell =>
         item.onChange { (_, _, newLogEntry) =>
-          text = "x"//if (newLogEntry != null) newLogEntry.toString else ""
+          text = null//"x"//if (newLogEntry != null) newLogEntry.toString else ""
           graphic = if (newLogEntry != null) {
             val curSlot = spanSlots(tableRow.value.getIndex)
             spanImageCreator.drawSpans2(curSlot.slots, s"RequestId:${newLogEntry.requestId}", newLogEntry.id)
           } else null
         }
+
+        cell.delegate.pseudoClassStateChanged(PseudoClass("spanCell"), true)
+
       }
     }
 
@@ -219,15 +222,6 @@ class LogTableController(logTableView: TableView[LogRow],
 
     bodyColumn.cellValueFactory = { _.value.body }
     bodyColumn.cellFactory = prepareColumnCellFactory(bodyColumnContetxMenuItems())
-  }
-
-  private def getSpansForEntry(newLogEntry: LogEntry, rowIdx: Int) = {
-    val curSpans = spanStore.get(newLogEntry.id.timestamp).toSet
-    val fromTime = logTableView.items.value(math.max(0, rowIdx - 30)).logEntry.id.timestamp
-    val toTime = logTableView.items.value(math.min(logTableView.items.value.size - 1, rowIdx + 30)).logEntry.id.timestamp
-    val spansToShow = spanStore.get(fromTime, toTime)
-                      .map(s => s.name -> curSpans.contains(s))
-    spansToShow
   }
 
   val spanImageCreator = new SpanImageCreator
@@ -619,7 +613,7 @@ class LogTableController(logTableView: TableView[LogRow],
   }
 
   private def parseSpanSlots(logRows: Seq[LogRow]): IndexedSeq[SpanRow] = {
-    val slots = logRows.foldLeft(mutable.Buffer(SpanRow(IndexedSeq(), Map()))) { (curList, row) =>
+    val slots = logRows.foldLeft(mutable.Buffer(SpanRow(IndexedSeq()))) { (curList, row) =>
       val spanRow = getCurRow(curList.last, spanStore.get(row.logEntry.id))
       curList += spanRow
     }
@@ -652,9 +646,9 @@ class LogTableController(logTableView: TableView[LogRow],
         resultSlots.take(lastFilledIdx + 1)
       else resultSlots
 
-    SpanRow(strippedSlots, strippedSlots.zipWithIndex.toMap)
+    SpanRow(strippedSlots)
   }
 
-  case class SpanRow(slots: IndexedSeq[Span], slotsMap: Map[Span, Int])
+  case class SpanRow(slots: IndexedSeq[Span])
 
 }

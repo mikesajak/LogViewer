@@ -24,13 +24,14 @@ object Measure {
   def measure[A](name: String, logLevel: LoggingLevel = Debug)(f: () => A)(implicit logger: Logger): A = {
     val stopwatch = Stopwatch.createStarted()
     try {
+      Logging.log(s"$name - started...", logLevel)
       val result = f()
       stopwatch.stop()
-      Logging.log(s"$name finished in $stopwatch", logLevel)
+      Logging.log(s"$name - finished in $stopwatch", logLevel)
       result
     } catch {
       case e: Exception =>
-        Logging.log(s"$name finished with exception in $stopwatch", e, LoggingLevel.Warning)
+        Logging.log(s"$name - finished with exception in $stopwatch", e, LoggingLevel.Warning)
         throw e
     }
   }
