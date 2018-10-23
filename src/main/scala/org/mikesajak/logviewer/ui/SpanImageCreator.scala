@@ -7,7 +7,7 @@ import scalafx.scene.paint.Color
 
 class SpanImageCreator {
 
-  val colorGenerator = new SimpleColorGenerator
+  val colorGenerator = new PredefColorGenerator
 
   val spanLineWidth = 2.0
   val spanWidth = 7.0

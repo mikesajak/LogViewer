@@ -144,7 +144,7 @@ class LogTableController(logTableView: TableView[LogRow],
     sourceColumn.cellFactory = prepareColumnCellFactory(basicColumnMenuItems("source"), Some("source"))
 
     fileColumn.cellValueFactory = { _.value.file }
-    fileColumn.cellFactory = prepareColumnCellFactory(basicColumnMenuItems("file"), Some("file"))
+    fileColumn.cellFactory = prepareColumnCellFactory(basicColumnMenuItems("file"), Some("file"), rightAlign = true)
 
     timestampColumn.cellValueFactory = { _.value.timestamp }
     timestampColumn.cellFactory = prepareColumnCellFactory(basicColumnMenuItems("timestamp"))
@@ -189,7 +189,7 @@ class LogTableController(logTableView: TableView[LogRow],
           } else null
         }
 
-        cell.delegate.pseudoClassStateChanged(PseudoClass("spanCell"), true)
+//        cell.delegate.pseudoClassStateChanged(PseudoClass("spanCell"), true)
 
       }
     }
@@ -227,10 +227,12 @@ class LogTableController(logTableView: TableView[LogRow],
   val spanImageCreator = new SpanImageCreator
 
   private def prepareColumnCellFactory(contextMenuItemsFunc: TableCell[LogRow, _] => Seq[MenuItem],
-                                       colorPool: Option[String] = None) = { tc: TableColumn[LogRow, String] =>
+                                       colorPool: Option[String] = None,
+                                       rightAlign: Boolean = false) = { tc: TableColumn[LogRow, String] =>
     new TableCell[LogRow, String]() { cell =>
       item.onChange { (_,_, newValue) =>
         text = newValue
+        cell.textOverrun = if (rightAlign) OverrunStyle.LeadingWordEllipsis else OverrunStyle.WordEllipsis
         graphic = if (newValue != null)
                     colorPool.map(p => spanImageCreator.getColorBoxFor(newValue, 8)).orNull
                   else null

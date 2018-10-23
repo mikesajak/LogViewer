@@ -1,6 +1,6 @@
-- time shift (+UI) for source
+- [Done] time shift (+UI) for source
     - e.g. logs from one source are delayed by constant time (because of wrong server time etc.), allow to correct it by hand
-- add context menu to table view - e.g. copy thread/requsetId/session/etc to clipboard (if clicked on thread etc.)
+- [Done] add context menu to table view - e.g. copy thread/requsetId/session/etc to clipboard (if clicked on thread etc.)
 - span start end parsers
     - parse log and find request start/end spans, register all spans
         - e.g. define regex that will extract request identifier (request id/session id/thread id/user id/anything)
@@ -12,3 +12,7 @@
     - virtually anything can be used for this - make it configurable, allow select by thread, session, request, user etc.
         - many such "spans" may be displayed - e.g. each span type may have separate table column
         - allow to add multiple columns at the same time - configurable
+
+- list highlighting basing on context
+    - e.g. if I select log entry, highlight all other entries that have the same requestId, or sessionId, or userId etc.
+    - maybe make a checkbox/toggle button(s) that enable such context highlighting for requestId, session etc.

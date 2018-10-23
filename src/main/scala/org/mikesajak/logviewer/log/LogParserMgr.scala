@@ -29,25 +29,29 @@ class LogParserMgr(eventBus: EventBus, globalState: GlobalState) {
   @Subscribe
   def handleOpenLog(request: OpenLogRequest): Unit = {
     Future {
-      val logStoreBuilder =
-        new ImmutableMemoryLogStore.Builder()
-//        new log.NitriteLogStore.MappedBuilder("test.db")
+      try {
+        val logStoreBuilder =
+          new ImmutableMemoryLogStore.Builder()
+        //        new log.NitriteLogStore.MappedBuilder("test.db")
 
-      parseLogs(request.files, logStoreBuilder, logStoreBuilder.threadSafe)
+        parseLogs(request.files, logStoreBuilder, logStoreBuilder.threadSafe)
 
-      val logStore = measure("Sorting entries and building log store") { () =>
-        logStoreBuilder.build()
+        val logStore = measure("Sorting entries and building log store") { () =>
+          logStoreBuilder.build()
+        }
+
+        val spanStore = measure("Parsing spans and building span store") { () =>
+          val spanParser = new SpanParser(new RequestIdMarkerMatcher) // TODO: configurable/pluggable matchers etc.
+          spanParser.buildSpanStore(logStore)
+        }
+
+        logger.info(s"Created new log store with ${logStore.size} entries, and span store with ${spanStore.size} spans.")
+
+        globalState.currentLogStore = logStore
+        eventBus.publish(SetNewLogEntries(logStore, spanStore))
+      } catch {
+        case e: Exception => logger.error("Exception ocurred during parsing", e)
       }
-
-      val spanStore = measure("Parsing spans and building span store") { () =>
-        val spanParser = new SpanParser(new RequestIdMarkerMatcher) // TODO: configurable/pluggable matchers etc.
-        spanParser.buildSpanStore(logStore)
-      }
-
-      logger.info(s"Created new log store with ${logStore.size} entries, and span store with ${spanStore.size} spans.")
-
-      globalState.currentLogStore = logStore
-      eventBus.publish(SetNewLogEntries(logStore, spanStore))
     }
   }
 
@@ -80,46 +84,93 @@ class LogParserMgr(eventBus: EventBus, globalState: GlobalState) {
   }
 
   private def parseLogs(inputPaths: Seq[File], logStoreBuilder: LogStoreBuilder, multithreaded: Boolean): Unit = {
-    val filesToParse = inputPaths.view
-                         .flatMap(f => traverseDir(f, logFilePattern))
-                         .toList
+    val logSources2Parse = inputPaths.view
+                           .flatMap(f => traverseDir20(f, logFilePattern))
+                           .toList
 
     // TODO: smarter log source definition - use list of input directories, and map directly to source dir->file
 
-    logger.debug(s"Found ${filesToParse.length} files to parse: $filesToParse")
+    logger.debug(s"Found ${logSources2Parse.length} files to parse: $logSources2Parse")
 
     val completedCount = new AtomicInteger()
 
-    measure(s"Parsing ${filesToParse.size} log files from ${inputPaths.map(_.getName)}") { () =>
-      val inputData = if (multithreaded) filesToParse.par else filesToParse
-      inputData.foreach { inputFile =>
+    measure(s"Parsing ${logSources2Parse.size} log files from ${inputPaths.map(_.getName)}") { () =>
+      val inputData = if (multithreaded) logSources2Parse.par else logSources2Parse
+      inputData.foreach { logSource =>
         val stopwatch = Stopwatch.createStarted()
 
-        val parserContext = new SimpleFileParserContext(inputFile.getParentFile.getName, inputFile.getName)
+        val parserContext = new SimpleFileParserContext(logSource)
         val idGenerator = new SimpleLogIdGenerator
         val logEntryParser = new SimpleLogEntryParser(parserContext, idGenerator)
-        val dataSource = new SimpleFileLogDataSource(inputFile)
+        val dataSource = new SimpleFileLogDataSource(logSource.file)
         val resultIterator = new LogParserIterator2(dataSource.lines, logEntryParser).flatten
             .grouped(BATCH_SIZE)
 
         resultIterator.foreach(batch => logStoreBuilder.add(batch))
 
         val completed = completedCount.incrementAndGet()
-        eventBus.publish(ParseProgress(completed.toFloat / filesToParse.length,
-          s"Parsing $completed/${filesToParse.length} log from ${inputFile.getName} finished in $stopwatch. Current logStore size is ${logStoreBuilder.size}"))
+        eventBus.publish(ParseProgress(completed.toFloat / logSources2Parse.length,
+          s"Parsing $completed/${logSources2Parse.length} log from ${new File(logSource.file).getName} finished in $stopwatch. Current logStore size is ${logStoreBuilder.size}"))
 
       }
     }
   }
 
+  private def logSourceFromFile(logFile: File) = LogSource(logFile.getParentFile.getName, logFile.getAbsolutePath)
+  private def logSourceFromFile(dir: File, logFile: File) = LogSource(dir.getName, logFile.getAbsolutePath)
+
+  private def quickScanLogs(inputPaths: Seq[File]) = {
+    val filesToParse = inputPaths.view
+                       .map(f => f -> (if(f.isDirectory) traverseDir2(f, logFilePattern, Some(f))
+                                       else traverseDir2(f, logFilePattern, None)))
+                       .toList
+
+    for ((path, logSource) <- filesToParse) {
+
+    }
+
+    print(s"$filesToParse")
+  }
+
+  case class LogFileStats()
+
   private def traverseDir(file: File, namePattern: Regex) : Seq[File] = file match {
-    case f if f.isFile => if (namePattern.findFirstMatchIn(f.getName).isDefined) List(f) else List.empty
+    case f if f.isFile => if (nameMatches(f, namePattern)) List(f) else List.empty
     case d =>
       val (subFiles, subDirs) = d.listFiles().partition(f => f.isFile)
-      val resultFiles = subFiles.filter(f => namePattern.findFirstMatchIn(f.getName).isDefined)
+      val resultFiles = subFiles.filter(f => nameMatches(f, namePattern))
       (subDirs foldLeft resultFiles)( (acc, dir) => acc ++ traverseDir(dir, namePattern))
   }
 
+  def nameMatches(f: File, pattern: Regex) = pattern.findFirstMatchIn(f.getName).isDefined
+
+  private def traverseDir20(file: File, namePattern: Regex): Seq[LogSource] = file match {
+    case f if f.isFile => if (nameMatches(f, namePattern)) List(logSourceFromFile(f)) else List.empty
+    case d if d.isDirectory =>
+      val (subFiles, subDirs) = d.listFiles.partition(_.isFile)
+      val subFileSources = subFiles.filter(f => nameMatches(f, namePattern)).map(logSourceFromFile)
+      subDirs.foldLeft(subFileSources)((acc, dir) => acc ++ traverseDir2(dir, namePattern, Some(dir)))
+  }
+
+  private def traverseDir2(file: File, namePattern: Regex, parent: Option[File]) : Seq[LogSource] = file match {
+    case f if f.isFile => if (namePattern.findFirstMatchIn(f.getName).isDefined)
+      List(logSourceFromFile(f)) else List.empty
+    case d =>
+      val (subFiles, subDirs) = d.listFiles().partition(f => f.isFile)
+      val resultFiles = subFiles.filter(f => namePattern.findFirstMatchIn(f.getName).isDefined)
+        .map(f => parent.map(p => logSourceFromFile(p, f)).getOrElse(logSourceFromFile(f)))
+      (subDirs foldLeft resultFiles)( (acc, dir) => acc ++ traverseDir2(dir, namePattern, parent))
+  }
+
+//  private def traverseDir3(file: File, namePattern: Regex, root: Boolean) : Seq[LogSource] = file match {
+//    case f if f.isFile => if (namePattern.findFirstMatchIn(f.getName).isDefined)
+//      List(logSourceFromFile(f)) else List.empty
+//    case d =>
+//      val (subFiles, subDirs) = d.listFiles().partition(f => f.isFile)
+//      val resultFiles = subFiles.filter(f => namePattern.findFirstMatchIn(f.getName).isDefined)
+//                        .map(f => if (root))
+//      (subDirs foldLeft resultFiles)( (acc, dir) => acc ++ traverseDir3(dir, namePattern, root))
+//  }
 }
 
 case class SetNewLogEntries(logStore: LogStore, spanStore: SpanStore)
