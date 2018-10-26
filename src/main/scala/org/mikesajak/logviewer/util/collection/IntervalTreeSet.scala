@@ -10,11 +10,20 @@ class IntervalStartOrdering[A](implicit ord: Ordering[A]) extends Ordering[Inter
 case class Interval[A](start: A, end: A)
 
 object IntervalTreeSet {
-  sealed abstract class Node[A](var level: Int)
-  case class LeafNode[A]() extends Node[A](0)
+  sealed abstract class Node[A](var level: Int) {
+    def add(v: Interval[A]): Node[A]
+    def updateMaxValue(): Unit
+  }
+  case class LeafNode[A]() extends Node[A](0) {
+    override def add(v: Interval[A]) = mkValueNode(v)
 
-  case class ValueNode[A](var interval: Interval[A], var maxEnd: A,
-                          override var level: Int, var left: Node[A], var right: Node[A])(implicit ord: Ordering[A]) extends Node[A](level) {
+    override def updateMaxValue(): Unit = {
+      // do nothing
+    }
+  }
+
+  case class ValueNode[A](var interval: Interval[A], var maxEnd: A, override var level: Int, var left: Node[A], var right: Node[A])
+                         (implicit ord: Ordering[A], implicit val iord: Ordering[Interval[A]]) extends Node[A](level) {
 //    def isEmptyLeaf: Boolean = interval == null
 //    def isNotEmptyLeaf: Boolean = interval != null
 
@@ -24,17 +33,79 @@ object IntervalTreeSet {
         case _ => interval.end
       }
     }
+
+    def add(v: Interval[A]) = {
+      assume(v != null)
+
+      if (iord.lt(v, interval))      left = left.add(v)
+      else if (iord.gt(v, interval)) right = right.add(v)
+      else throw new IllegalArgumentException(s"""Value \"$v\" is already in a tree""""")
+
+      split(skew()) // rebalance this node
+    }
+
+    /*
+     *       |          |
+     *   A - B    ->    A - B
+     *  /   / \        /   / \
+     * 0   1   2      0   1   2
+     */
+    private def skew(): ValueNode[A] = {
+      if (left.level < level) this
+      else {
+        val result = left.asInstanceOf[ValueNode[A]]
+        left = result.right
+        result.right = this
+
+        result.updateMaxValue()
+        result.left.updateMaxValue()
+        result.right.updateMaxValue()
+
+        result
+      }
+    }
+
+    def smart[A](tp: type[A])
+
+  /*
+   *   |                      |
+   *   |                    - B -
+   *   |                   /     \
+   *   A - B - C    ->    A       C
+   *  /   /   / \        / \     / \
+   * 0   1   2   3      0   1   2   3
+   */
+  private def split(): ValueNode[A] = {
+    // must short-circuit because if right.level < self.level, then right.right might be null
+    right match {
+      case r if r.level < level |
+           rv @ ValueNode[A](_, _, _, rl, rr)  =>
+    }
+  }
+    if (right.level < level ||
+      right.right.right.level < level) this
+    else {
+      val result = right
+      right = result.left
+      result.left = this
+      result.level += 1
+
+      result.updateMaxValue()
+      result.left.updateMaxValue()
+      result.right.updateMaxValue()
+
+      result
+    }
   }
 
   def isEmptyLeaf[A](node: Node[A]): Boolean = node.isInstanceOf[LeafNode[A]]
   def isNotEmptyLeaf[A](node: Node[A]): Boolean = !isEmptyLeaf(node)
 
-  def mkLeafNode[A]()(implicit ord: Ordering[A]): ValueNode[A] =
-    ValueNode(null, null, -1, null, null)
+  def mkLeafNode[A]()(implicit ord: Ordering[A]): LeafNode[A] = LeafNode()
   def mkValueNode[A](interval: Interval[A])(implicit ord: Ordering[A]): ValueNode[A] =
     ValueNode[A](interval, interval.end, 1, mkLeafNode(), mkLeafNode())
 
-  class Iter[A](root: ValueNode[A]) extends Iterator[Interval[A]] {
+  class Iter[A](root: Node[A]) extends Iterator[Interval[A]] {
     private var stack: List[ValueNode[A]] = pushLeft(root, List())
 
     @tailrec
@@ -135,7 +206,7 @@ class IntervalTreeSet[A](implicit ord: Ordering[A], implicit val iord: Ordering[
     }
   }
 
-  protected def removeFrom(node: Node[A], v: Interval[A]): ValueNode[A] = {
+  protected def removeFrom(node: Node[A], v: Interval[A]): Node[A] = {
     node match {
       case _ : LeafNode[A] => throw new IllegalArgumentException("""Value \"$v\" is not in a tree""")
       case n: ValueNode[A] =>
@@ -146,7 +217,16 @@ class IntervalTreeSet[A](implicit ord: Ordering[A], implicit val iord: Ordering[
           n.right = removeFrom(n.right, v)
           rebalance(n)
         } else {
-          if (isNotEmptyLeaf(n.left) {
+          n match {
+            case ValueNode(_, _, _, left: ValueNode[A], right) =>
+
+            case ValueNode(_, _, _, left, right: ValueNode[A]) =>
+            case _ =>
+              assume(n.level == 1)
+              mkLeafNode()
+          }
+
+          if (isNotEmptyLeaf(n.left)) {
             var tmp = n.left.asInstanceOf[ValueNode[A]] // TODO: avoid cast
             while (isNotEmptyLeaf(n.right))
               tmp = tmp.right.asInstanceOf[ValueNode[A]] // TODO: avoid cast
@@ -184,7 +264,7 @@ class IntervalTreeSet[A](implicit ord: Ordering[A], implicit val iord: Ordering[
         rr.right = skew(rr.right.asInstanceOf[ValueNode[A]]) // TODO: avoid cast
 
       result = split(result)
-      result.right = split(result.right)
+      result.right = split(rr)
 
       result
     }
