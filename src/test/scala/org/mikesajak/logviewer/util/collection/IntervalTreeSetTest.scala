@@ -9,13 +9,11 @@ class IntervalTreeSetTest extends FlatSpec with Matchers {
   "Interval tree" should "allow adding intervals" in {
     val intervalTree = new IntervalTreeSet[Int]()
 
-    intervalTree.add(Interval[Int](1, 2))
-    intervalTree.add(Interval[Int](3, 4))
-    intervalTree.add(Interval[Int](5, 6))
-    intervalTree.add(Interval[Int](7, 8))
-    intervalTree.add(Interval[Int](9, 10))
-    intervalTree.add(Interval[Int](11, 12))
+    for (i <- 1 to 1000 by 3) {
+      intervalTree.add(Interval[Int](i, i+1))
+    }
 
     println(s"tree:\n$intervalTree")
+
   }
 }
